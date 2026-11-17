@@ -124,3 +124,7 @@ node scripts/build.mjs examples/small/cache.js --out cache.html
 ## Where the look comes from
 
 Victorian patent drawings for the fine line work, numbered parts and shading. Randall Munroe's *Thing Explainer* for plain words and labels on everything. Bartosz Ciechanowski's explainers for building a machine one part at a time. Bret Victor's *Ladder of Abstraction* for showing one concrete case before the rule. And Kamran Ahmed's [/stick-scene](https://github.com/nilbuild/stick-scene), which this skill's packaging follows.
+
+## License
+
+[MIT](LICENSE). Scenes you make with the skill are yours.
