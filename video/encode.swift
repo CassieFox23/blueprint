@@ -7,8 +7,9 @@ import ImageIO
 let a = CommandLine.arguments
 guard a.count >= 4 else { print("usage: encode.swift framesDir audio.m4a out.mp4 [fps]"); exit(2) }
 let dir = a[1], audioPath = a[2], out = a[3]
-let fps = Int32(a.count > 4 ? a[4] : "30") ?? 30
-let files = try FileManager.default.contentsOfDirectory(atPath: dir).filter { $0.hasPrefix("f") && $0.hasSuffix(".jpg") }.sorted()
+let fps = Int32(a.count > 4 ? a[4] : "60") ?? 60
+let bitrate = Int(a.count > 5 ? a[5] : "18000000") ?? 18_000_000
+let files = try FileManager.default.contentsOfDirectory(atPath: dir).filter { $0.hasPrefix("f") && ($0.hasSuffix(".png") || $0.hasSuffix(".jpg")) }.sorted()
 guard !files.isEmpty else { print("no frames in \(dir)"); exit(1) }
 let W = 1920, H = 1080
 
@@ -18,7 +19,7 @@ let writer = try AVAssetWriter(outputURL: tmp, fileType: .mp4)
 let settings: [String: Any] = [
   AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: W, AVVideoHeightKey: H,
   AVVideoCompressionPropertiesKey: [
-    AVVideoAverageBitRateKey: 9_000_000, AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+    AVVideoAverageBitRateKey: bitrate, AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
     AVVideoExpectedSourceFrameRateKey: Int(fps), AVVideoMaxKeyFrameIntervalKey: Int(fps) * 2
   ]
 ]
