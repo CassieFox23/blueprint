@@ -75,6 +75,8 @@ const body = `<title>Blueprint</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E %3Crect width=%2232%22 height=%2232%22 rx=%227.5%22 fill=%22%231d4b8a%22/%3E %3Cpath d=%22M15.9 5.6 L10.6 26%22 fill=%22none%22 stroke=%22%23ffffff%22 stroke-width=%222.8%22 stroke-linecap=%22round%22/%3E %3Ccircle cx=%2218.6%22 cy=%2219.6%22 r=%225.55%22 fill=%22none%22 stroke=%22%23ffffff%22 stroke-width=%222.8%22/%3E %3Ccircle cx=%2218.6%22 cy=%2219.6%22 r=%221.9%22 fill=%22%23ffcf4a%22/%3E %3C/svg%3E">
 <meta name="description" content="A skill for Claude Code that answers how-it-works questions with animated explainers drawn like patent sheets.">
 <link rel="canonical" href="https://blueprint.intincrab.com/">
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
 <meta property="og:url" content="https://blueprint.intincrab.com/">
 <meta property="og:title" content="Blueprint · explainers drawn like a patent">
 <meta property="og:description" content="Ask how something works. Claude draws the answer part by part on blueprint paper.">
@@ -594,5 +596,11 @@ window.addEventListener('hashchange',route);route();
 `;
 
 mkdirSync(join(here, 'dist'), { recursive: true });
+// Vercel only wires up Web Analytics (/_vercel/insights/*) for deployments it builds, so the
+// deploy folder carries a one-line build step that copies the page into public/.
+writeFileSync(join(here, 'dist/package.json'), JSON.stringify({
+  name: 'blueprint-site', private: true,
+  scripts: { build: "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});for(const f of fs.readdirSync('.'))if(!['public','package.json','.vercel','node_modules'].includes(f))fs.cpSync(f,'public/'+f,{recursive:true})\"" }
+}, null, 2) + '\n');
 writeFileSync(join(here, 'dist/index.html'), `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n</head><body>\n${body}\n</body></html>\n`);
 console.log(`site: ${scenes.length} scenes (${small.length} small, ${complex.length} complex), repo ${REPO} -> site/dist/index.html (${(body.length / 1024).toFixed(0)} KB)`);
