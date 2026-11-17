@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="64" height="64" role="img" aria-label="Blueprint">
+  <rect width="32" height="32" rx="7.5" fill="#1d4b8a"/>
+  <rect x="5.25" y="5.25" width="21.5" height="21.5" rx="1.5" fill="none" stroke="#eaf2ff" stroke-opacity=".55" stroke-width="1.2"/>
+  <path d="M10.5 22.5 L19 10.6" fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round"/>
+  <circle cx="21.2" cy="8.9" r="3" fill="#ffcf4a"/>
+</svg>

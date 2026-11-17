@@ -1,3 +1,5 @@
+<img src="assets/logo.svg" width="56" alt="">
+
 # /blueprint
 
 A Claude Code skill that draws animated explainers like a Victorian patent sheet on blueprint paper.
@@ -6,10 +8,12 @@ The sheet starts empty. Each part is drawn in because the last one fell short: a
 
 ## Install
 
-Copy this folder into your skills directory:
+Add it with the skills CLI, or clone it into your skills folder:
 
 ```bash
-cp -R blueprint-build ~/.claude/skills/blueprint
+npx skills add intincrab/blueprint
+# or
+git clone https://github.com/intincrab/blueprint.git ~/.claude/skills/blueprint
 ```
 
 Then ask your agent:

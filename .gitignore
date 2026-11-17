@@ -5,3 +5,5 @@ dist/
 .taste-skill/
 site/assets/
 gallery/index.html
+video/*.mp4
+video/frames/

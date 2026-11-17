@@ -72,7 +72,7 @@ ${s.id === 'emudhra' ? `        <p class="card-l">In October 2026, eight signing
 const codeBox = (html, copy) => `<div class="code"><pre><code>${html}</code></pre>${copy ? `<button class="copy" type="button" data-copy="${esc(copy)}">Copy</button>` : ''}</div>`;
 
 const body = `<title>Blueprint</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%274%27 fill=%27%231d4b8a%27/%3E%3Crect x=%274.5%27 y=%274.5%27 width=%277%27 height=%277%27 fill=%27none%27 stroke=%27%23eaf2ff%27 stroke-width=%271.3%27/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22 %3E %3Crect width=%2232%22 height=%2232%22 rx=%227.5%22 fill=%22%231d4b8a%22/%3E %3Crect x=%225.25%22 y=%225.25%22 width=%2221.5%22 height=%2221.5%22 rx=%221.5%22 fill=%22none%22 stroke=%22%23eaf2ff%22 stroke-opacity=%22.55%22 stroke-width=%221.2%22/%3E %3Cpath d=%22M10.5 22.5 L19 10.6%22 fill=%22none%22 stroke=%22%23ffffff%22 stroke-width=%222.8%22 stroke-linecap=%22round%22/%3E %3Ccircle cx=%2221.2%22 cy=%228.9%22 r=%223%22 fill=%22%23ffcf4a%22/%3E %3C/svg%3E">
 <meta name="description" content="A skill for Claude Code that answers how-it-works questions with animated explainers drawn like patent sheets.">
 <meta property="og:title" content="Blueprint · explainers drawn like a patent">
 <meta property="og:description" content="Ask how something works. Claude draws the answer part by part on blueprint paper.">
@@ -257,6 +257,15 @@ dialog[open]{animation:pop .25s var(--ease)}
 /* ===== revamp: light paper, blueprint-blue fields, serif display ===== */
 .grid-bg{}
 .bar{background:var(--blue);color:#fff;-webkit-backdrop-filter:none;backdrop-filter:none;transition:background-color .25s,color .25s,border-color .25s}
+.mark{gap:10px;--t:#fff;--l:#1d4b8a}
+.mark svg{width:26px;height:26px;display:block;flex:none}
+.mark .t{fill:var(--t);transition:fill .25s}
+.mark .f{fill:none;stroke:var(--l);stroke-opacity:.5;stroke-width:1.2;transition:stroke .25s}
+.mark .s{fill:none;stroke:var(--l);stroke-width:2.8;stroke-linecap:round;transition:stroke .25s}
+.mark span{font-family:var(--serif);font-style:italic;font-weight:400;font-size:25px;letter-spacing:-.01em;line-height:1}
+.bar.stuck .mark{--t:#1d4b8a;--l:#fff}
+.mark:hover circle{transform:translate(1.5px,-2px)}
+.mark circle{transition:transform .25s var(--ease)}
 .bar .links a{color:var(--blue-soft)}
 .bar .links a:hover{color:#fff;background:rgba(255,255,255,.12)}
 .bar .links a[aria-current=true]{color:#fff}
@@ -340,7 +349,7 @@ h2{font-family:var(--serif);font-weight:400;font-size:clamp(40px,5.6vw,72px);lin
 
 <div class="bar" id="bar"><div class="wrap">
   <nav class="nav" aria-label="Main">
-    <a class="mark" href="#top"><i aria-hidden="true"></i>blueprint</a>
+    <a class="mark" href="#top" aria-label="Blueprint, home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect class="t" width="32" height="32" rx="7.5"/><rect class="f" x="5.25" y="5.25" width="21.5" height="21.5" rx="1.5"/><path class="s" d="M10.5 22.5 L19 10.6"/><circle cx="21.2" cy="8.9" r="3" fill="#ffcf4a"/></svg><span>blueprint</span></a>
     <div class="links"><a href="#how" class="hide-s" data-nav="how">How it works</a><a href="#examples" data-nav="examples">Examples</a><a href="#install" data-nav="install">Install</a><a href="${GH}" target="_blank" rel="noopener" class="hide-s">GitHub ↗</a><button class="nav-cta" type="button" data-copy="${esc(INSTALL)}" data-install>Copy install</button></div>
   </nav>
 </div></div>
