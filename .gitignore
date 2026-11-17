@@ -1,0 +1,7 @@
+node_modules
+*.frames.png
+.DS_Store
+dist/
+.taste-skill/
+site/assets/
+gallery/index.html
