@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Build the product site: one page, every example live.
 //   node site/build.mjs [--repo owner/name]  ->  site/dist/index.html (+ site/dist/img)
-import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, mkdirSync, copyFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -78,8 +78,19 @@ const body = `<title>Blueprint</title>
 <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
 <script defer src="/_vercel/insights/script.js"></script>
 <meta property="og:url" content="https://blueprint.intincrab.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Blueprint">
 <meta property="og:title" content="Blueprint · explainers drawn like a patent">
 <meta property="og:description" content="Ask how something works. Claude draws the answer part by part on blueprint paper.">
+<meta property="og:image" content="https://blueprint.intincrab.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="/blueprint: Ask how it works. Get the drawing. Beside it, a blueprint sheet explaining a cache.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Blueprint · explainers drawn like a patent">
+<meta name="twitter:description" content="Ask how something works. Claude draws the answer part by part on blueprint paper.">
+<meta name="twitter:image" content="https://blueprint.intincrab.com/og.png">
+<meta name="theme-color" content="#1d4b8a">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
@@ -596,6 +607,7 @@ window.addEventListener('hashchange',route);route();
 `;
 
 mkdirSync(join(here, 'dist'), { recursive: true });
+if (existsSync(join(here, 'og.png'))) copyFileSync(join(here, 'og.png'), join(here, 'dist/og.png'));   // the share card (node site/og.mjs)
 // Vercel only wires up Web Analytics (/_vercel/insights/*) for deployments it builds, so the
 // deploy folder carries a one-line build step that copies the page into public/.
 writeFileSync(join(here, 'dist/package.json'), JSON.stringify({
