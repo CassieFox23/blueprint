@@ -76,14 +76,20 @@ const S = BLUEPRINT.scenes, mk = {};
 function mount(id) { const d = document.createElement('div'); $('sheets').appendChild(d); const c = BLUEPRINT.mount(d, S[id], { play: 'still', controls: false }); mk[id] = { el: d, c, tl: c.timeline }; return mk[id]; }
 ['cache', 'emudhra', 'event-loop', 'llm', 'git-merge'].forEach(mount);
 const st = (id, i) => mk[id].tl.steps[i].a;
-const T = window.TIMING || { beat: 0.6, beats: 52, text: 'how a cache works', keys: Array.from({ length: 17 }, (_, i) => 0.6 + i * 0.125), enter: 3.0 };
+const T = window.TIMING || (() => {          // fallback when rendered without a music file: 120 BPM, fast typing
+  const keys = []; let t = 0.3; 'how a cache works'.split('').forEach((c, i) => { keys.push(t); t += 0.045 + (i % 3) * 0.008 + (c === ' ' ? 0.03 : 0); });
+  return { beat: 0.5, beats: 50, text: 'how a cache works', keys, enter: 1.5 };
+})();
 const B = T.beat, bt = n => n * B;                       // every cut sits on a beat of the music
+// Beat map (50 beats ≈ 25 s at ~120 BPM): prompt 0-4 · cache 4-20 · line 20-24 · four cuts 24-40 · end 40-50
+const P = 4, C = 20, LN = 24, END = 40;
 const SHOTS = [
-  ['cache', bt(6), bt(22), 0.2, mk.cache.tl.total, 'steps'],
-  ['emudhra', bt(26), bt(30), st('emudhra', 3) + 1.2, st('emudhra', 5) + 0.6, 'The eMudhra key compromise'],
-  ['event-loop', bt(30), bt(34), st('event-loop', 3), st('event-loop', 3) + 7.5, 'The JavaScript event loop'],
-  ['llm', bt(34), bt(38), st('llm', 2), st('llm', 2) + 7.5, 'How a language model writes'],
-  ['git-merge', bt(38), bt(42), st('git-merge', 2), st('git-merge', 2) + 7.5, 'How git merges two branches']
+  { id: 'cache', a: bt(P), b: bt(12), from: st('cache', 1) - 0.3, to: st('cache', 3) - 0.2, cap: 'steps', fin: true },
+  { id: 'cache', a: bt(12), b: bt(C), from: st('cache', 5) - 0.2, to: mk.cache.tl.total - 0.4, cap: 'steps', fout: true },
+  { id: 'emudhra', a: bt(LN), b: bt(LN + 4), from: st('emudhra', 3) + 1.2, to: st('emudhra', 5) + 0.6, cap: 'The eMudhra key compromise', fin: true },
+  { id: 'event-loop', a: bt(LN + 4), b: bt(LN + 8), from: st('event-loop', 3), to: st('event-loop', 3) + 6, cap: 'The JavaScript event loop' },
+  { id: 'llm', a: bt(LN + 8), b: bt(LN + 12), from: st('llm', 2), to: st('llm', 2) + 6, cap: 'How a language model writes' },
+  { id: 'git-merge', a: bt(LN + 12), b: bt(END), from: st('git-merge', 2), to: st('git-merge', 2) + 6, cap: 'How git merges two branches', fout: true }
 ];
 const typed = $('typed');
 T.text.split('').forEach(ch => { const i = document.createElement('i'); i.textContent = ch; typed.appendChild(i); });
@@ -92,46 +98,46 @@ const chars = [...typed.children];
 window.DURATION = T.beats * B;
 window.setTime = t => {
   // 1 · the prompt, typed like a typewriter: each key lands with a small strike
-  $('s1').style.opacity = 1 - seg(t, bt(6) - .3, bt(6));
+  $('s1').style.opacity = 1 - seg(t, bt(P) - .2, bt(P));
   chars.forEach((el, i) => {
     const dt = t - T.keys[i];
     el.style.display = dt >= 0 ? 'inline-block' : 'none';
-    const k = clamp(dt / .09);
+    const k = clamp(dt / .06);
     el.style.transform = `translateY(${(1 - k) * -7}px) scale(${1 + (1 - k) * .14})`;
     el.style.opacity = .55 + .45 * k;
   });
   const last = T.keys[T.keys.length - 1];
   const idle = t < T.keys[0] - .05 || (t > last + .12 && t < T.enter);
-  $('caret').style.opacity = t >= T.enter ? 0 : (idle ? (Math.floor(t / .28) % 2 ? .25 : 1) : 1);
-  const press = t >= T.enter ? Math.sin(Math.PI * clamp((t - T.enter) / .28)) : 0;      // the return key
+  $('caret').style.opacity = t >= T.enter ? 0 : (idle ? (Math.floor(t / .22) % 2 ? .25 : 1) : 1);
+  const press = t >= T.enter ? Math.sin(Math.PI * clamp((t - T.enter) / .2)) : 0;      // the return key
   document.querySelector('.prompt').style.transform = `scale(${1 - .035 * press})`;
   // 2 + 4 · sheets
   let any = 0, cap = '', title = false;
   for (const id in mk) mk[id].el.style.opacity = 0;
-  for (const [id, a, b, from, to, mode] of SHOTS) {
+  for (const { id, a, b, from, to, cap: c, fin, fout } of SHOTS) {
     if (t < a || t >= b) continue;
     const m = mk[id], k = (t - a) / (b - a), ts = from + (to - from) * k;
     m.c.seek(ts);
-    const o = mode === 'steps' ? Math.min(seg(t, a, a + .3), 1 - seg(t, b - .25, b)) : Math.min(seg(t, a, a + .14), id === 'git-merge' ? 1 - seg(t, b - .25, b) : 1);
+    const o = Math.min(fin ? seg(t, a, a + .22) : 1, fout ? 1 - seg(t, b - .22, b) : 1);
     m.el.style.opacity = o; any = Math.max(any, o);
     m.el.style.transform = `scale(${1 + .03 * k})`;
-    if (mode === 'steps') { let s = m.tl.steps[0]; for (const x of m.tl.steps) if (x.a <= ts + .001) s = x; cap = s.say.replace(/\s*\(\d+\)/g, ''); }
-    else { cap = mode; title = true; }
+    if (c === 'steps') { let s = m.tl.steps[0]; for (const x of m.tl.steps) if (x.a <= ts + .001) s = x; cap = s.say.replace(/\s*\(\d+\)/g, ''); }
+    else { cap = c; title = true; }
   }
   $('stage').style.opacity = any ? 1 : 0;
   $('cap').textContent = cap; $('cap').className = 'cap' + (title ? ' title' : ''); $('cap').style.opacity = any;
   // 3 · the line, one half per bar
-  const a3 = bt(22), b3 = bt(26);
-  $('s3').style.opacity = t >= a3 && t < b3 ? 1 - seg(t, b3 - .22, b3) : 0;
+  const a3 = bt(C), b3 = bt(LN);
+  $('s3').style.opacity = t >= a3 && t < b3 ? 1 - seg(t, b3 - .18, b3) : 0;
   $('l1').style.cssText = `display:block;opacity:${seg(t, a3, a3 + .3)};transform:translateY(${(1 - seg(t, a3, a3 + .4)) * 34}px)`;
   $('l2').style.cssText = `opacity:${seg(t, a3 + 2 * B - .05, a3 + 2 * B + .3)};transform:translateY(${(1 - seg(t, a3 + 2 * B - .05, a3 + 2 * B + .4)) * 34}px)`;
   // 6 · the end card: the mark is drawn, stem then bowl, and the centre point lands
-  const a6 = bt(42), e = seg(t, a6, a6 + .45);
+  const a6 = bt(END), e = seg(t, a6, a6 + .35);
   $('s6').style.opacity = e;
   $('s6').style.transform = `translateY(${(1 - e) * 22}px)`;
-  $('lg1').setAttribute('stroke-dashoffset', 1 - seg(t, a6 + .15, a6 + .65));
-  $('lg2').setAttribute('stroke-dashoffset', 1 - seg(t, a6 + .55, a6 + 1.25));
-  const d = clamp((t - (a6 + 2 * B)) / .3), pop = d < 1 ? 1.7 * Math.sin(Math.PI * d * .62) / Math.sin(Math.PI * .62) : 1;
+  $('lg1').setAttribute('stroke-dashoffset', 1 - seg(t, a6 + .1, a6 + .45));
+  $('lg2').setAttribute('stroke-dashoffset', 1 - seg(t, a6 + .4, a6 + .95));
+  const d = clamp((t - Math.max(a6 + 1, a6 + 2 * B)) / .3), pop = d < 1 ? 1.7 * Math.sin(Math.PI * d * .62) / Math.sin(Math.PI * .62) : 1;
   $('dot').setAttribute('transform', `translate(18.6 19.6) scale(${d ? Math.max(pop, .001) : 0}) translate(-18.6 -19.6)`);
 };
 window.ready = document.fonts.ready.then(() => Promise.all(['400 40px "Instrument Serif"', 'italic 400 40px "Instrument Serif"', '500 40px "Instrument Sans"', '500 40px "IBM Plex Mono"', '400 12px "IBM Plex Mono"'].map(f => document.fonts.load(f)))).then(() => { setTime(0); return true; });
