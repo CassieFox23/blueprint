@@ -7,8 +7,8 @@
 <p align="center">
   Ask Claude Code how something works. It draws the answer like an old patent sheet, one part at a time.
   <br><br>
-  <a href="https://blueprint-skill.vercel.app"><b>Website</b></a> ·
-  <a href="https://blueprint-skill.vercel.app/#examples"><b>All 21 examples</b></a> ·
+  <a href="https://blueprint.intincrab.com"><b>Website</b></a> ·
+  <a href="https://blueprint.intincrab.com/#examples"><b>All 21 examples</b></a> ·
   <a href="#install"><b>Install</b></a>
 </p>
 
@@ -66,7 +66,7 @@ That chain of "but… so…" is the explanation, and the animation above is that
   </tr>
 </table>
 
-Watch any of them at **[blueprint-skill.vercel.app](https://blueprint-skill.vercel.app/#examples)**, where you can step through each one and copy its source.
+Watch any of them at **[blueprint.intincrab.com](https://blueprint.intincrab.com/#examples)**, where you can step through each one and copy its source.
 
 | Small · 3–6 steps | Complex · 8–10 steps, with camera moves |
 |---|---|
