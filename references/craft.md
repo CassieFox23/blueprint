@@ -178,7 +178,20 @@ A step lasts: draws (0.85 s each, staggered 0.16 s) + runs + `then` (0.9 s) + `h
 | workers, CPU, threads | `gear` (spin), several boxes |
 | boundary: server, process, network | `zone` |
 
-## 7. Mistakes already made
+## 7. Exporting
+
+`scripts/export.mjs` renders the scene in a browser and writes:
+
+| format | what you get | good for |
+|---|---|---|
+| `gif` | a looping GIF, 1280 px wide, 1.8× speed, a pause on the finished sheet | READMEs, Slack, Notion, docs |
+| `mp4` | H.264 video, 30 fps, 1.25× speed, optional `--audio` | X, LinkedIn, talks |
+| `png` | the finished sheet at 2× | thumbnails, docs, social cards |
+| `png --steps` | one PNG per step's end | slide decks |
+
+A good GIF stays under about 5 MB: lower `--width` or `--fps`, or raise `--speed`, if it grows past that.
+
+## 8. Mistakes already made
 
 - **A caption that describes the past.** "The request went to the server" → "The request travels to the server (4)."
 - **Parts drawn before they are needed.** If step 1 draws everything, there is no "but… so…". Draw the cache in the step that introduces it.

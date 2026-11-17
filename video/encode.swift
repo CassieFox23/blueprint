@@ -11,7 +11,10 @@ let fps = Int32(a.count > 4 ? a[4] : "60") ?? 60
 let bitrate = Int(a.count > 5 ? a[5] : "18000000") ?? 18_000_000
 let files = try FileManager.default.contentsOfDirectory(atPath: dir).filter { $0.hasPrefix("f") && ($0.hasSuffix(".png") || $0.hasSuffix(".jpg")) }.sorted()
 guard !files.isEmpty else { print("no frames in \(dir)"); exit(1) }
-let W = 1920, H = 1080
+// size comes from the first frame, rounded down to even numbers for H.264
+guard let firstSrc = CGImageSourceCreateWithURL(URL(fileURLWithPath: dir + "/" + files[0]) as CFURL, nil),
+      let firstImg = CGImageSourceCreateImageAtIndex(firstSrc, 0, nil) else { print("bad frame \(files[0])"); exit(1) }
+let W = firstImg.width / 2 * 2, H = firstImg.height / 2 * 2
 
 let tmp = URL(fileURLWithPath: out + ".video.mp4")
 try? FileManager.default.removeItem(at: tmp)
@@ -53,6 +56,13 @@ writer.finishWriting { sem.signal() }
 sem.wait()
 guard writer.status == .completed else { print("video: \(String(describing: writer.error))"); exit(1) }
 
+// no audio: the video file is the result
+if audioPath == "-" {
+  try? FileManager.default.removeItem(at: URL(fileURLWithPath: out))
+  try FileManager.default.moveItem(at: tmp, to: URL(fileURLWithPath: out))
+  print("wrote \(out) · \(files.count) frames · no audio")
+  exit(0)
+}
 // mux: copy the video track, add the audio track
 let comp = AVMutableComposition()
 let v = AVURLAsset(url: tmp), au = AVURLAsset(url: URL(fileURLWithPath: audioPath))

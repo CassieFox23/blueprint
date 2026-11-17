@@ -39,6 +39,8 @@ It needs Node. [Playwright](https://playwright.dev) is optional, and lets Claude
 /blueprint our signup flow, for the docs page
 /blueprint why the retry storm took the API down
 /blueprint the event loop, as a complex scene
+/blueprint how a cache works, as a gif
+/blueprint last night's outage, from this postmortem
 ```
 
 Claude finds the chain of reasons in the topic, picks parts from a kit of 28 (drawers, cabinets, gears, gates, locks, clocks, queues and more), lays out the sheet, lints it, looks at every step, and then embeds it in your page or exports a file.
@@ -100,6 +102,25 @@ Watch any of them at **[blueprint.intincrab.com](https://blueprint.intincrab.com
 
 Every sheet has play and pause, previous and next step, and a step bar. With reduced motion turned on it shows the finished sheet. The runtime is one file with no dependencies.
 
+## Share it as a GIF, video or image
+
+GitHub READMEs, Slack, X, Notion and slide decks can't run the element, so export the sheet:
+
+```bash
+node scripts/export.mjs examples/small/cache.js --format gif            # loops in a README or Slack
+node scripts/export.mjs examples/small/cache.js --format mp4            # for X or a talk; add --audio track.mp3
+node scripts/export.mjs examples/small/cache.js --format png            # the finished sheet at 2x
+node scripts/export.mjs examples/small/cache.js --format png --steps    # one image per step, for slides
+```
+
+Or just ask: `/blueprint how a cache works, as a gif`. Exporting needs [Playwright](https://playwright.dev). MP4 also needs ffmpeg, except on macOS, where the built-in video encoder is used.
+
+## Incidents and postmortems
+
+`templates/incident.js` gives an outage a ready-made story: a normal day, the change, what broke, how it was noticed, the fix that stopped it, the root cause, and the change that prevents it next time, ending on a timeline. Hand Claude your postmortem and it fills the template with your facts, links the sources, and keeps the wording blameless. [The eMudhra key compromise](examples/complex/emudhra.js) shows the same shape for a public incident.
+
+## One HTML file
+
 To send a sheet to someone as a single file:
 
 ```bash
@@ -114,9 +135,11 @@ node scripts/build.mjs examples/small/cache.js --out cache.html
 | `references/craft.md` | The scene format, the part kit, line kinds, step actions, and which part suits which idea |
 | `runtime/blueprint.js` | Layout, timeline, SVG renderer and the `<blueprint-scene>` element |
 | `templates/scene.js` | A starting scene |
+| `templates/incident.js` | A starting scene for incidents and postmortems |
 | `scripts/check.mjs` | Lints a scene: unknown ids, overlapping parts, lines through parts, labels off the sheet |
 | `scripts/frames.mjs` | Renders chosen moments into one contact sheet (needs Playwright) |
 | `scripts/build.mjs` | Turns scenes into one standalone HTML page |
+| `scripts/export.mjs` | Exports a scene to GIF, MP4 or PNG |
 | `examples/` | 10 small and 11 complex scenes |
 | `site/` | The website, built with `node site/build.mjs` |
 | `video/` | The teaser film and the scripts that render it and the README preview |

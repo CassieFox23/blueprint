@@ -1,6 +1,6 @@
 ---
 name: blueprint
-description: Make animated explainers drawn like a Victorian patent sheet on blueprint paper. A mechanism is built part by part, each numbered with a leader line, each added because the last one fell short ("but… so…"), while tokens travel along lines and a one-line caption tells the story. Output is a `<blueprint-scene>` element (or a standalone HTML page) with play, step and replay controls. Use when the user asks for a blueprint or patent-drawing explainer, an animated diagram of how a system, algorithm or process works, a "how X works" scene for docs, a README, a blog post or a talk, or types /blueprint [topic].
+description: Make animated explainers drawn like a Victorian patent sheet on blueprint paper. A mechanism is built part by part, each numbered with a leader line, each added because the last one fell short ("but… so…"), while tokens travel along lines and a one-line caption tells the story. Output is a `<blueprint-scene>` element (or a standalone HTML page) with play, step and replay controls. Use when the user asks for a blueprint or patent-drawing explainer, an animated diagram of how a system, algorithm or process works, a "how X works" scene for docs, a README, a blog post or a talk, an explainer of an incident or postmortem, an explainer as a GIF, video, image or slides, or types /blueprint [topic].
 ---
 
 # Blueprint
@@ -14,9 +14,11 @@ The drawing is done by `runtime/blueprint.js`. You never draw SVG: you write a s
 - `runtime/blueprint.js`: the whole runtime. Defines `<blueprint-scene>`, `BLUEPRINT.scene(id, spec)` and `BLUEPRINT.mount(el, spec, opts)`. Copy it unchanged.
 - `references/craft.md`: the scene format, every part kind with its sizes and states, line kinds, step actions, the metaphor catalogue and the mistakes already made once. **Read it before writing a scene.**
 - `templates/scene.js`: the starting point.
+- `templates/incident.js`: the starting point for an incident or postmortem sheet (see **Incident sheets**).
 - `scripts/check.mjs`: lints a scene without a browser (unknown ids, overlaps, lines through parts, labels off the sheet, long captions).
 - `scripts/frames.mjs`: renders the scene frozen at chosen moments into one contact-sheet PNG and reports runtime errors.
 - `scripts/build.mjs`: turns scene files into a standalone HTML page with the runtime inlined.
+- `scripts/export.mjs`: renders a scene to GIF, MP4 or PNG for places that cannot run JavaScript.
 - `examples/small/` (10 scenes, 3–6 steps) and `examples/complex/` (10 scenes, 7–10 steps, camera moves). `examples/small/cache.js` is the cleanest small one, `examples/complex/url.js` the cleanest complex one.
 
 ## Workflow
@@ -43,6 +45,15 @@ The drawing is done by `runtime/blueprint.js`. You never draw SVG: you write a s
    ```
    (`blueprint.js` must come first in document order), or export one page: `node <skill-dir>/scripts/build.mjs scene.js --out scene.html`.
 
+   When the user asks for a GIF, video, image or slides, or the sheet is going somewhere that cannot run JavaScript (a GitHub README, Slack, X, Notion, a deck), export it:
+   ```sh
+   NODE_PATH=<scratch>/node_modules node <skill-dir>/scripts/export.mjs scene.js --format gif     # README, Slack
+   NODE_PATH=<scratch>/node_modules node <skill-dir>/scripts/export.mjs scene.js --format mp4     # X, LinkedIn, talks
+   NODE_PATH=<scratch>/node_modules node <skill-dir>/scripts/export.mjs scene.js --format png     # the finished sheet, 2x
+   NODE_PATH=<scratch>/node_modules node <skill-dir>/scripts/export.mjs scene.js --format png --steps   # one PNG per step, for slides
+   ```
+   `--format all` writes all three. Useful options: `--out`, `--width` (default 1280), `--speed` (GIF 1.8×, MP4 1.25×), `--fps`, `--paper`, `--audio track.mp3` (MP4 only). GIF and PNG need only Playwright. MP4 uses ffmpeg when it is installed, AVFoundation on macOS otherwise. Read one exported frame or the PNG back before handing it over.
+
 ## The element
 
 - `scene`: the id given to `BLUEPRINT.scene('<id>', …)`.
@@ -53,6 +64,15 @@ The drawing is done by `runtime/blueprint.js`. You never draw SVG: you write a s
 - `no-font`: does not load IBM Plex Mono from Google Fonts.
 - `speed`: playback rate, e.g. `speed="1.25"`.
 - Reduced motion shows the finished sheet; the step buttons jump between finished steps. Off-screen scenes do not animate.
+
+## Incident sheets
+
+When the topic is an outage, a breach or a postmortem, start from `templates/incident.js` and keep its story shape: a normal day, the change or trigger, what broke (with a number), how it was noticed, what stopped the damage, recovery, the root cause in plain words, the fix that prevents it (the "So…" step), and a timeline in the last step's note.
+
+- **Facts only.** Every time, number and claim comes from the user's postmortem, status page or tickets, or from published coverage for a public incident. Put the links in the scene's `sources`. If a fact is missing, ask for it or leave it out; never invent one.
+- **Blameless.** Name systems and changes, never people ("a config change", not "Ravi's change").
+- **One clock.** All times in one time zone, said once in the timeline.
+- **The fix earns its part.** The prevention is a new part drawn in with "So…", like any other part.
 
 ## Style rules
 
