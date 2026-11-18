@@ -27,6 +27,29 @@
   var r2 = function (n) { return Math.round(n * 100) / 100; };
   var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var arr = function (v) { return v == null ? [] : Array.isArray(v) ? v : [v]; };
+  var hasOwn = function (o, k) { return o != null && Object.prototype.hasOwnProperty.call(o, k); };
+  var dict = function () { return Object.create(null); };
+  // A number from a number or a numeric string; NaN for anything else.
+  var num = function (v) { return typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '') ? Number(v) : NaN; };
+  var fin = function (v) { return typeof v === 'number' && isFinite(v); };
+  var isObj = function (v) { return v != null && typeof v === 'object' && !Array.isArray(v); };
+  var ID_RE = /^[A-Za-z0-9_-]+$/;
+  function lev(a, b) {
+    var d = [], i, j;
+    for (i = 0; i <= a.length; i++) d[i] = [i];
+    for (j = 0; j <= b.length; j++) d[0][j] = j;
+    for (i = 1; i <= a.length; i++) for (j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return d[a.length][b.length];
+  }
+  // ' (did you mean "steps"?)' when a known key is close to the unknown one.
+  function hint(k, list) {
+    var best = null, bd = Infinity, lk = String(k).toLowerCase();
+    list.forEach(function (c) { var d = lev(lk, c.toLowerCase()); if (d < bd) { bd = d; best = c; } });
+    return best && bd <= (lk.length > 4 ? 2 : 1) ? ' (did you mean "' + best + '"?)' : '';
+  }
+  function unknownKeys(o, known, where, warnings) {
+    Object.keys(o).forEach(function (k) { if (known.indexOf(k) < 0) warnings.push(where + ': unknown key "' + k + '" is ignored' + hint(k, known)); });
+  }
 
   /* ───────────── papers ───────────── */
   var THEMES = {
@@ -34,6 +57,29 @@
     linen: { bg: '#f3efe4', grid: '#e3dccb', ink: '#1c2433', muted: '#6d6656', accent: '#c4531b', fail: '#b42a1f', ok: '#2c7a4b' }
   };
   var FONT = "'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace";
+  // Colours go into SVG attributes and a style attribute, so only plain colour
+  // syntax is accepted: #hex, rgb()/rgba()/hsl()/hsla() with numbers, a colour
+  // name, or var(--name).
+  var COLOR_RE = /^(?:#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|(?:rgba?|hsla?)\(\s*(?:[-+]?(?:\d+\.?\d*|\.\d+)(?:%|deg|turn|rad)?\s*[,\/]?\s*){3,4}\)|[a-zA-Z]+|var\(--[A-Za-z0-9_-]+\))$/;
+  var isColor = function (v) { return typeof v === 'string' && v.length <= 64 && COLOR_RE.test(v); };
+  function resolveTheme(spec, opts, warnings) {
+    var paper = opts.paper || spec.paper || 'blue';
+    if (!hasOwn(THEMES, paper) || !isObj(THEMES[paper])) { warnings.push('unknown paper "' + paper + '" (papers: ' + Object.keys(THEMES).join(', ') + '); using blue'); paper = 'blue'; }
+    var keys = Object.keys(THEMES.blue), T = Object.assign({}, THEMES[paper]);
+    [['colors', spec.colors], ['opts.colors', opts.colors]].forEach(function (src) {
+      var c = src[1];
+      if (c == null) return;
+      if (!isObj(c)) { warnings.push(src[0] + ' must be an object like { accent: "#ffcf4a" }; ignored'); return; }
+      Object.keys(c).forEach(function (k) {
+        if (keys.indexOf(k) < 0) { warnings.push(src[0] + ': unknown colour "' + k + '" is ignored (colours: ' + keys.join(', ') + ')' + hint(k, keys)); return; }
+        var v = typeof c[k] === 'string' ? c[k].trim() : c[k];
+        if (isColor(v)) T[k] = v;
+        else warnings.push(src[0] + '.' + k + ': ' + JSON.stringify(String(c[k]).slice(0, 40)) + ' is not a colour (use #hex, rgb(), hsl(), a colour name or var(--name)); ignored');
+      });
+    });
+    keys.forEach(function (k) { if (!isColor(T[k])) { warnings.push('paper "' + paper + '": colour "' + k + '" is not a colour; using the blue paper\'s'); T[k] = THEMES.blue[k]; } });
+    return T;
+  }
 
   /* ───────────── drawing helpers (local coords) ───────────── */
   function ln(d, cls) { return '<path class="bp-ln' + (cls ? ' ' + cls : '') + '" d="' + d + '" pathLength="1"/>'; }
@@ -311,12 +357,17 @@
   var LEAD = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0], ne: [1, -1], nw: [-1, -1], se: [1, 1], sw: [-1, 1] };
 
   function boxOf(p) {
-    var d = KINDS[p.kind].size, sz = p.size || [], w = p.w != null ? p.w : (sz[0] != null ? sz[0] : d[0]), h = p.h != null ? p.h : (sz[1] != null ? sz[1] : d[1]);
-    return { x: p.at[0] - w / 2, y: p.at[1] - h / 2, w: w, h: h, cx: p.at[0], cy: p.at[1] };
+    var d = KINDS[p.kind].size, sz = Array.isArray(p.size) ? p.size : [], w = num(p.w != null ? p.w : (sz[0] != null ? sz[0] : d[0])), h = num(p.h != null ? p.h : (sz[1] != null ? sz[1] : d[1]));
+    var cx = num(p.at[0]), cy = num(p.at[1]);
+    return { x: cx - w / 2, y: cy - h / 2, w: w, h: h, cx: cx, cy: cy };
   }
 
   function port(ref, parts) {
-    if (Array.isArray(ref)) return { x: ref[0], y: ref[1], side: null };
+    if (Array.isArray(ref)) {
+      var px = num(ref[0]), py = num(ref[1]);
+      if (ref.length !== 2 || !fin(px) || !fin(py)) throw new Error('a point must be [x, y] with two numbers');
+      return { x: px, y: py, side: null };
+    }
     var m = PORT_RE.exec(String(ref));
     if (!m) throw new Error('cannot read port "' + ref + '" (use "id", "id.e", "id.n+10" or [x, y])');
     var P = parts[m[1]];
@@ -399,20 +450,99 @@
     return { x: x, y: y, anchor: anchor, lines: lines, at: at };
   }
 
+  var SPEC_KEYS = ['title', 'fig', 'sheet', 'paper', 'size', 'parts', 'lines', 'steps', 'colors', 'sources'];
+  var PART_COMMON = ['id', 'kind', 'at', 'size', 'w', 'h', 'label', 'labelAt', 'n', 'lead', 'leadLen', 'name', 'note', 'muted'];
+  var PART_EXTRA = { box: ['hatch'], cabinet: ['rows'], drawer: ['slots'], gear: ['teeth', 'rate', 'angle'], wheel: ['rate', 'angle'], clock: ['rate', 'angle'], stack: ['max'], queue: ['slots'], book: ['max'], switch: ['outs'] };
+  var LINE_KEYS = ['id', 'from', 'to', 'via', 'bend', 'kind', 'label', 'labelPos', 'heavy', 'arrow', 'r'];
+  var LINE_KINDS = ['track', 'pipe', 'belt', 'wire', 'dim'];
+  var LABEL_AT = ['in', 'c', 's', 'n', 'e', 'w', 'top'];
+  var COUNT_MAX = 64;
+  var partKeys = function (kind) {
+    return PART_COMMON.concat(PART_EXTRA[kind] || [], (KINDS[kind].state || []).filter(function (k) { return k !== 'text'; }));
+  };
+  var allPartKeys = function () {
+    var all = PART_COMMON.slice();
+    Object.keys(KINDS).forEach(function (k) { partKeys(k).forEach(function (x) { if (all.indexOf(x) < 0) all.push(x); }); });
+    return all;
+  };
+
+  // A checked copy of a part: numbers coerced, absurd counts capped, bad
+  // optional values dropped (with a warning) so the kind's default applies.
+  function cleanPart(p, warnings) {
+    var q = Object.assign({}, p), where = 'part "' + p.id + '"', known = partKeys(p.kind);
+    Object.keys(p).forEach(function (k) {
+      if (known.indexOf(k) >= 0) return;
+      if (k === 'text') warnings.push(where + ': "text" does nothing on a part (use "label"; "text" belongs in a step\'s set)');
+      else if (allPartKeys().indexOf(k) >= 0) warnings.push(where + ': "' + k + '" does nothing on a ' + p.kind);
+      else warnings.push(where + ': unknown key "' + k + '" is ignored' + hint(k, known));
+    });
+    q.at = [num(p.at[0]), num(p.at[1])];
+    ['slots', 'teeth', 'max', 'rows'].forEach(function (k) {
+      if (q[k] == null) return;
+      var v = num(q[k]);
+      if (!fin(v) || v < 1) { warnings.push(where + ': "' + k + '" must be a number of at least 1; using the default'); delete q[k]; }
+      else if (v > COUNT_MAX) { warnings.push(where + ': "' + k + '" is capped at ' + COUNT_MAX); q[k] = COUNT_MAX; }
+      else q[k] = v;
+    });
+    ['leadLen', 'rate', 'angle'].forEach(function (k) {
+      if (q[k] == null) return;
+      var v = num(q[k]);
+      if (fin(v)) q[k] = v; else { warnings.push(where + ': "' + k + '" must be a number; ignored'); delete q[k]; }
+    });
+    if (q.lead != null) {
+      if (Array.isArray(q.lead)) {
+        var lx = num(q.lead[0]), ly = num(q.lead[1]);
+        if (q.lead.length === 2 && fin(lx) && fin(ly)) q.lead = [lx, ly]; else { warnings.push(where + ': "lead" as [dx, dy] needs two numbers; using ne'); delete q.lead; }
+      } else if (!hasOwn(LEAD, q.lead)) { warnings.push(where + ': unknown lead "' + q.lead + '" (use n, s, e, w, ne, nw, se, sw or [dx, dy]); using ne'); delete q.lead; }
+    }
+    if (q.labelAt != null && LABEL_AT.indexOf(q.labelAt) < 0) warnings.push(where + ': unknown labelAt "' + q.labelAt + '" (use ' + LABEL_AT.join(', ') + ')');
+    if (q.outs != null) {
+      var outs = Array.isArray(q.outs) ? q.outs.slice(0, COUNT_MAX).map(num) : [];
+      if (outs.length && outs.every(fin)) { if (q.outs.length > COUNT_MAX) warnings.push(where + ': "outs" is capped at ' + COUNT_MAX); q.outs = outs; }
+      else { warnings.push(where + ': "outs" must be a list of angles in degrees; using the default'); delete q.outs; }
+    }
+    return q;
+  }
+
   function layout(spec) {
-    var errors = [], warnings = [], size = spec.size || [640, 320], parts = {}, order = [], lines = {};
+    var errors = [], warnings = [], size = [640, 320], parts = dict(), order = [], lines = dict();
+    if (!isObj(spec)) { errors.push('the scene must be an object with parts, lines and steps'); spec = {}; }
+    unknownKeys(spec, SPEC_KEYS, 'scene', warnings);
+    if (spec.size != null) {
+      var sw = Array.isArray(spec.size) ? num(spec.size[0]) : NaN, sh2 = Array.isArray(spec.size) ? num(spec.size[1]) : NaN;
+      if (spec.size.length === 2 && fin(sw) && fin(sh2) && sw > 0 && sh2 > 0) size = [sw, sh2];
+      else errors.push('"size" must be [width, height] with two positive numbers, like [640, 320]; using [640, 320]');
+    }
     arr(spec.parts).forEach(function (p, i) {
-      if (!p || !p.id) { errors.push('parts[' + i + '] has no id'); return; }
+      if (!isObj(p) || p.id == null || p.id === '') { errors.push('parts[' + i + '] has no id'); return; }
+      if (!ID_RE.test(String(p.id))) { errors.push('parts[' + i + ']: id ' + JSON.stringify(String(p.id)) + ' may use only letters, digits, _ and -'); return; }
       if (parts[p.id]) { errors.push('duplicate part id "' + p.id + '"'); return; }
-      if (!KINDS[p.kind]) { errors.push('part "' + p.id + '": unknown kind "' + p.kind + '" (kinds: ' + Object.keys(KINDS).join(', ') + ')'); return; }
-      if (!Array.isArray(p.at) || p.at.length !== 2) { errors.push('part "' + p.id + '": "at" must be [x, y], the centre'); return; }
-      parts[p.id] = { p: p, box: boxOf(p), kind: KINDS[p.kind] }; order.push(p.id);
+      if (!hasOwn(KINDS, p.kind)) { errors.push('part "' + p.id + '": unknown kind "' + p.kind + '" (kinds: ' + Object.keys(KINDS).join(', ') + ')'); return; }
+      if (!Array.isArray(p.at) || p.at.length !== 2 || !fin(num(p.at[0])) || !fin(num(p.at[1]))) { errors.push('part "' + p.id + '": "at" must be [x, y], the centre, with two numbers'); return; }
+      var q = cleanPart(p, warnings), box = boxOf(q);
+      if (!fin(box.w) || !fin(box.h) || box.w < 0 || box.h < 0) { errors.push('part "' + p.id + '": "size" (or w, h) must be two numbers of 0 or more'); return; }
+      parts[p.id] = { p: q, box: box, kind: KINDS[p.kind] }; order.push(String(p.id));
     });
     arr(spec.lines).forEach(function (l, i) {
-      if (!l || !l.id) { errors.push('lines[' + i + '] has no id'); return; }
+      if (!isObj(l) || l.id == null || l.id === '') { errors.push('lines[' + i + '] has no id'); return; }
+      if (!ID_RE.test(String(l.id))) { errors.push('lines[' + i + ']: id ' + JSON.stringify(String(l.id)) + ' may use only letters, digits, _ and -'); return; }
       if (lines[l.id] || parts[l.id]) { errors.push('duplicate id "' + l.id + '"'); return; }
-      try { var a = port(l.from, parts), b = port(l.to, parts); lines[l.id] = { l: l, pts: route(a, b, l.via, l.bend) }; }
-      catch (e) { errors.push('line "' + l.id + '": ' + e.message); }
+      var where = 'line "' + l.id + '"';
+      unknownKeys(l, LINE_KEYS, where, warnings);
+      if (l.kind != null && LINE_KINDS.indexOf(l.kind) < 0) warnings.push(where + ': unknown kind "' + l.kind + '" (kinds: ' + LINE_KINDS.join(', ') + '); drawn as a track');
+      var via = null;
+      if (l.via != null) {
+        if (!Array.isArray(l.via)) errors.push(where + ': "via" must be a list of [x, y] points; ignored');
+        else {
+          try { via = l.via.map(function (v) { var pt = port(Array.isArray(v) ? v : [NaN, NaN], parts); return [pt.x, pt.y]; }); }
+          catch (e) { errors.push(where + ': every "via" point must be [x, y] with two numbers; ignored'); via = null; }
+        }
+      }
+      try {
+        var a = port(l.from, parts), b = port(l.to, parts), pts = route(a, b, via, l.bend);
+        if (pts.length < 2) { errors.push(where + ': both ends are the same point, so there is nothing to draw (check "from" and "to")'); pts = [pts[0], pts[0].slice()]; }
+        lines[l.id] = { l: l, pts: pts };
+      } catch (e) { errors.push(where + ': ' + e.message); }
     });
     return { W: size[0], H: size[1], parts: parts, order: order, lines: lines, errors: errors, warnings: warnings };
   }
@@ -420,11 +550,17 @@
   /* ───────────── timeline ───────────── */
   var STEP_KEYS = ['say', 'draw', 'erase', 'run', 'spin', 'glow', 'ring', 'light', 'fail', 'ok', 'set', 'note', 'view', 'then', 'hold'];
   var THEN_KEYS = ['set', 'glow', 'ring', 'light', 'fail', 'ok', 'note', 'spin', 'hold'];
+  var RUN_KEYS = ['on', 'from', 'to', 'item', 'text', 'dur', 'at', 'with', 'count', 'gap', 'arrive', 'back', 'dir', 'span', 'stay', 'ease', 'color'];
+  var ARRIVE_KEYS = ['set', 'glow', 'ring', 'light', 'fail', 'ok', 'note', 'spin'];
+  var NOTE_KEYS = ['at', 'text', 'dx', 'dy', 'anchor', 'keep', 'pos'];
+  var ANCHORS = ['start', 'middle', 'end'];
+  var RUN_COUNT_MAX = 50;
 
   function compile(spec, L) {
     L = L || layout(spec);
+    if (!isObj(spec)) spec = {};
     var errors = L.errors, warnings = L.warnings, has = function (id) { return !!(L.parts[id] || L.lines[id]); };
-    var tl = { steps: [], draws: {}, sets: {}, glows: [], marks: [], spins: [], rings: [], lights: [], runs: [], notes: [], views: [] };
+    var tl = { steps: [], draws: dict(), sets: dict(), glows: [], marks: [], spins: [], rings: [], lights: [], runs: [], notes: [], views: [] };
     var push = function (map, id, ev) { (map[id] = map[id] || []).push(ev); };
     var check = function (where, ids, partsOnly) {
       return arr(ids).filter(function (id) {
@@ -432,26 +568,57 @@
         errors.push(where + ': unknown ' + (partsOnly ? 'part' : 'part or line') + ' "' + id + '"'); return false;
       });
     };
-    var t = 0.5;
-    arr(spec.steps).forEach(function (s, i) {
+    // An optional number: the default when absent, a warning and the default when not a number.
+    var opt = function (v, def, where, min) {
+      if (v == null) return def;
+      var n = num(v);
+      if (fin(n) && (min == null || n >= min)) return n;
+      warnings.push(where + ': ' + JSON.stringify(v) + ' is not ' + (min == null ? 'a number' : 'a number of at least ' + min) + '; using ' + def);
+      return def;
+    };
+    var steps = arr(spec.steps), t = 0.5, runSeq = 0, lastIdx = -1;
+    steps.forEach(function (s, i) { if (isObj(s)) lastIdx = i; });
+    steps.forEach(function (s, i) {
       var w = 'step ' + (i + 1);
-      Object.keys(s).forEach(function (k) { if (STEP_KEYS.indexOf(k) < 0) warnings.push(w + ': unknown key "' + k + '" is ignored'); });
-      var st = { i: i, a: t, say: s.say || '' }, cur = t;
+      if (!isObj(s)) { errors.push(w + ' is ' + (s === null ? 'null' : 'not an object') + '; it is skipped (a step is { say, draw, run, … })'); return; }
+      unknownKeys(s, STEP_KEYS, w, warnings);
+      var si = tl.steps.length, st = { i: i, a: t, say: s.say != null ? String(s.say) : '' }, cur = t;
       if (!s.say) warnings.push(w + ': no caption ("say")');
       check(w + ' draw', s.draw).forEach(function (id, k) { var a = t + k * 0.16, b = a + 0.85; push(tl.draws, id, { type: 'draw', a: a, b: b }); cur = Math.max(cur, b + 0.2); });
       check(w + ' erase', s.erase).forEach(function (id) { push(tl.draws, id, { type: 'erase', a: t, b: t + 0.5 }); cur = Math.max(cur, t + 0.5); });
-      if (s.view) tl.views.push({ a: t, b: t + 1.1, view: s.view });
+      if (s.view) {
+        var v = s.view, okView = v === 'all';
+        if (Array.isArray(v) && v.length && v.every(fin)) {
+          okView = v.length === 4 && v[2] > 0 && v[3] > 0;
+          if (!okView) warnings.push(w + ' view: [x, y, w, h] needs four numbers with a positive width and height; ignored');
+        } else if (!okView) {
+          var ids = arr(v);
+          okView = ids.length > 0 && ids.every(function (id) { return typeof id === 'string'; });
+          if (!okView) warnings.push(w + ' view: use part or line ids, [x, y, w, h] or "all"; ignored');
+          else ids.forEach(function (id) { if (!has(id)) warnings.push(w + ' view: unknown part or line "' + id + '"'); });
+        }
+        if (okView) tl.views.push({ a: t, b: t + 1.1, view: v });
+      }
       var act = cur, end = act, prevEnd = act, prevStart = act;
       var arrivals = [];
       arr(s.run).forEach(function (r, j) {
         var rw = w + ' run ' + (j + 1);
+        if (!isObj(r)) { errors.push(rw + ' is not an object; skipped'); return; }
+        unknownKeys(r, RUN_KEYS, rw, warnings);
         if (r.on && !L.lines[r.on]) { errors.push(rw + ': unknown line "' + r.on + '"'); return; }
         if (!r.on && !(r.from && r.to)) { errors.push(rw + ': needs "on" (a line id) or "from" and "to"'); return; }
         if (!r.on) { try { port(r.from, L.parts); port(r.to, L.parts); } catch (e) { errors.push(rw + ': ' + e.message); return; } }
-        var dur = r.dur != null ? r.dur : 1.2, a = r.at != null ? act + r.at : r.with ? prevStart : prevEnd, count = r.count || 1, gap = r.gap != null ? r.gap : 0.32;
-        for (var c = 0; c < count; c++) tl.runs.push({ r: r, a: a + c * gap, b: a + c * gap + dur, step: i });
+        var dur = opt(r.dur, 1.2, rw + ' dur', 0), at = opt(r.at, null, rw + ' at'), gap = opt(r.gap, 0.32, rw + ' gap', 0);
+        var count = r.count == null ? 1 : opt(r.count, 1, rw + ' count', 1);
+        if (count > RUN_COUNT_MAX) { warnings.push(rw + ': count is capped at ' + RUN_COUNT_MAX); count = RUN_COUNT_MAX; }
+        count = Math.floor(count);
+        var a = at != null ? act + at : r.with ? prevStart : prevEnd, rid = ++runSeq;
+        for (var c = 0; c < count; c++) tl.runs.push({ r: r, a: a + c * gap, b: a + c * gap + dur, step: si, rid: rid });
         var b = a + (count - 1) * gap + dur;
-        if (r.arrive) arrivals.push({ src: r.arrive, a: b, wh: rw + ' arrive' });
+        if (r.arrive != null) {
+          if (!isObj(r.arrive)) errors.push(rw + ' arrive: must be an object like { set: { … } }; ignored');
+          else { unknownKeys(r.arrive, ARRIVE_KEYS, rw + ' arrive', warnings); arrivals.push({ src: r.arrive, a: b, wh: rw + ' arrive' }); }
+        }
         prevStart = a; prevEnd = r.with ? Math.max(prevEnd, b) : b; end = Math.max(end, b);
       });
       var winEnd = Math.max(end, act + 1.2);
@@ -463,34 +630,42 @@
         check(wh + ' light', src.light, true).forEach(function (id) { tl.lights.push({ id: id, a: a, b: b }); });
         check(wh + ' fail', src.fail, true).forEach(function (id) { var m = { id: id, kind: 'fail', a: a }; tl.marks.push(m); stepMarks.push(m); });
         check(wh + ' ok', src.ok, true).forEach(function (id) { var m = { id: id, kind: 'ok', a: a }; tl.marks.push(m); stepMarks.push(m); });
-        if (src.set) Object.keys(src.set).forEach(function (id) {
+        if (src.set != null && !isObj(src.set)) errors.push(wh + ' set: must be an object like { drawer: { fill: 1 } }; ignored');
+        else if (src.set) Object.keys(src.set).forEach(function (id) {
           if (!L.parts[id]) { errors.push(wh + ' set: unknown part "' + id + '"'); return; }
           var K = L.parts[id].kind, vals = src.set[id];
+          if (!isObj(vals)) { errors.push(wh + ' set: "' + id + '" needs an object of state values, like { ' + ((K.state || ['text'])[0]) + ': 1 }, not ' + (vals === null ? 'null' : JSON.stringify(vals))); return; }
           Object.keys(vals).forEach(function (key) {
             if ((K.state || []).indexOf(key) < 0 && key !== 'text') warnings.push(wh + ' set: "' + key + '" does nothing on a ' + L.parts[id].p.kind + ' (it takes: ' + ((K.state || []).concat(['text']).join(', ')) + ')');
             push(tl.sets, id, { a: a, key: key, v: vals[key] });
           });
         });
         arr(src.note).forEach(function (n) {
-          if (!n || n.text == null) { errors.push(wh + ' note: needs "text"'); return; }
-          if (!Array.isArray(n.at) && !L.lines[n.at]) { try { port(n.at, L.parts); } catch (e) { errors.push(wh + ' note: ' + e.message); return; } }
+          if (!isObj(n) || n.text == null) { errors.push(wh + ' note: needs "text"'); return; }
+          unknownKeys(n, NOTE_KEYS, wh + ' note', warnings);
+          if (Array.isArray(n.at)) { try { port(n.at, L.parts); } catch (e) { errors.push(wh + ' note: ' + e.message); return; } }
+          else if (!L.lines[n.at]) { try { port(n.at, L.parts); } catch (e) { errors.push(wh + ' note: ' + e.message); return; } }
+          if (n.anchor != null && ANCHORS.indexOf(n.anchor) < 0) warnings.push(wh + ' note: anchor must be start, middle or end; ignored');
           var m = { n: n, a: a }; tl.notes.push(m); stepMarks.push(m);
         });
       };
       effects(s, act, winEnd, w);
       arrivals.forEach(function (x) { effects(x.src, x.a, x.a + 0.9, x.wh); });
       var last = winEnd;
-      if (s.then) {
-        Object.keys(s.then).forEach(function (k) { if (THEN_KEYS.indexOf(k) < 0) warnings.push(w + ' then: "' + k + '" is not allowed here'); });
+      if (s.then != null && !isObj(s.then)) errors.push(w + ' then: must be an object like { set: { … } }; ignored');
+      else if (s.then) {
+        Object.keys(s.then).forEach(function (k) { if (THEN_KEYS.indexOf(k) < 0) warnings.push(w + ' then: "' + k + '" is not allowed here' + hint(k, THEN_KEYS)); });
         effects(s.then, winEnd, winEnd + 1.0, w + ' then');
         last = winEnd + 0.9;
       }
-      st.b = last + (s.hold != null ? s.hold : (s.then && s.then.hold != null ? s.then.hold : 1.4));
-      var isLast = i === arr(spec.steps).length - 1;
-      stepMarks.forEach(function (m) { m.b = (m.n && m.n.keep) || m.keep || isLast ? Infinity : st.b + 0.25; });
+      st.b = last + opt(s.hold != null ? s.hold : (isObj(s.then) && s.then.hold != null ? s.then.hold : null), 1.4, w + ' hold', 0);
+      var isLast = i === lastIdx;
+      stepMarks.forEach(function (m) { m.b = (m.n && m.n.keep) || isLast ? Infinity : st.b + 0.25; });
       tl.steps.push(st);
       t = st.b;
     });
+    // State changes apply in time order, whatever order the runs were written in.
+    Object.keys(tl.sets).forEach(function (id) { tl.sets[id].sort(function (x, y) { return x.a - y.a; }); });
     tl.total = t + 0.4;
     tl.period = tl.total + 1.1;
     return tl;
@@ -519,7 +694,7 @@
   }
 
   /* ───────────── browser rendering ───────────── */
-  var SCENES = {};
+  var SCENES = dict();
   var uid = 0;
   var CSS = [
     'blueprint-scene{display:block}',
@@ -561,23 +736,41 @@
     '.bp-dots button[aria-current="step"]::before{opacity:1}',
     '.bp-key{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:4px;font:400 12px/1.45 var(--bp-font)}',
     '.bp-key b{font-weight:600;display:inline-block;min-width:1.6em}',
-    '@media (prefers-reduced-motion: reduce){.bp-svg{cursor:default}}'
+    '.bp-svg:focus-visible{outline:2px solid var(--bp-accent);outline-offset:-5px}',
+    '.bp-err{border:1.6px solid;border-radius:6px;padding:18px 20px;font:400 12px/1.5 ' + FONT + ';letter-spacing:.04em;white-space:pre-wrap;overflow-wrap:anywhere}',
+    '.bp-err-hd{font-size:10px;letter-spacing:.16em;opacity:.8;margin:0 0 6px}'
   ].join('\n');
 
-  function injectCSS(font) {
+  // The base CSS and the web font are separate: a scene mounted with
+  // font: false never stops a later scene from loading the font.
+  function injectCSS() {
     if (!HAS_DOM || document.getElementById('bp-css')) return;
     var s = document.createElement('style'); s.id = 'bp-css'; s.textContent = CSS; document.head.appendChild(s);
-    if (font && !document.getElementById('bp-font')) {
-      var l = document.createElement('link'); l.id = 'bp-font'; l.rel = 'stylesheet';
-      l.href = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap'; document.head.appendChild(l);
-    }
+  }
+  function injectFont() {
+    if (!HAS_DOM || document.getElementById('bp-font')) return;
+    var l = document.createElement('link'); l.id = 'bp-font'; l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap'; document.head.appendChild(l);
   }
 
-  function wrapCaption(text, max) {
+  // Up to `rows` rows of at most `max` characters. Two rows are balanced; a
+  // longer caption fills rows greedily and the last row ends in an ellipsis.
+  var CAP_ROWS = 3;
+  function wrapCaption(text, max, rows) {
+    rows = rows || CAP_ROWS; max = Math.max(8, max);
+    text = String(text).replace(/\s+/g, ' ').trim();
     if (text.length <= max) return [text];
-    var words = text.split(' '), a = '', i = 0;
-    while (i < words.length && (a + ' ' + words[i]).trim().length <= Math.ceil(text.length / 2) + 6) { a = (a + ' ' + words[i]).trim(); i++; }
-    return [a, words.slice(i).join(' ')];
+    var words = [];
+    text.split(' ').forEach(function (w) { while (w.length > max) { words.push(w.slice(0, max)); w = w.slice(max); } if (w) words.push(w); });
+    var half = Math.min(max, Math.ceil(text.length / 2) + 6), a = words[0], i = 1;
+    while (i < words.length && (a + ' ' + words[i]).length <= half) { a += ' ' + words[i]; i++; }
+    var b = words.slice(i).join(' ');
+    if (b.length <= max) return b ? [a, b] : [a];
+    var out = [], cur = '';
+    words.forEach(function (w) { if (!cur) cur = w; else if ((cur + ' ' + w).length <= max) cur += ' ' + w; else { out.push(cur); cur = w; } });
+    if (cur) out.push(cur);
+    if (out.length > rows) { out = out.slice(0, rows); out[rows - 1] = out[rows - 1].slice(0, max - 1).replace(/\s+$/, '') + '\u2026'; }
+    return out;
   }
 
   function tokenMarkup(r) {
@@ -613,7 +806,6 @@
       var settable = (tl.sets[pid] || []).some(function (e) { return e.key === 'text'; });
       var lg = labelGeom(P) || (settable ? labelGeom({ p: Object.assign({}, P.p, { label: ' ' }), box: b, kind: K }) : null);
       s += '<g data-part="' + pid + '" transform="translate(' + r2(b.x) + ' ' + r2(b.y) + ')"><g data-k="body">' + K.draw(b.w, b.h, P.p);
-      if (P.p.hatch && P.p.kind !== 'box') s += '';
       s += '</g>';
       if (lg) s += '<text class="bp-tx' + (P.p.muted ? ' bp-mu' : '') + '" data-k="label" x="' + r2(lg.x) + '" y="' + r2(lg.y) + '" text-anchor="' + lg.anchor + '">' + lg.lines.map(function (t, i) { return '<tspan x="' + r2(lg.x) + '" dy="' + (i ? 11 : 0) + '">' + esc(t) + '</tspan>'; }).join('') + '</text>';
       if (ld) s += '<g data-k="lead"><path class="bp-ln bp-thin" d="' + ld.d + '" pathLength="1" transform="translate(' + r2(-b.x) + ' ' + r2(-b.y) + ')"/><text class="bp-num" x="' + r2(ld.tx - b.x) + '" y="' + r2(ld.ty - b.y) + '" text-anchor="' + ld.anchor + '">' + esc(ld.text) + '</text></g>';
@@ -621,7 +813,7 @@
     };
     L.order.filter(function (p) { return L.parts[p].kind.back; }).forEach(function (p) { o += partMarkup(p); });
     Object.keys(L.lines).forEach(function (lid) {
-      var X = L.lines[lid], l = X.l, d = roundPath(X.pts, l.r != null ? l.r : 10), k = l.kind || 'track', s = '<g data-line="' + lid + '">';
+      var X = L.lines[lid], l = X.l, d = roundPath(X.pts, fin(num(l.r)) ? num(l.r) : 10), k = l.kind || 'track', s = '<g data-line="' + lid + '">';
       if (k === 'pipe') s += ln(d, 'bp-po') + ln(d, 'bp-pi');
       else if (k === 'belt') s += ln(d, 'bp-bo') + ln(d, 'bp-bi') + '<path class="bp-bt" data-k="belt" d="' + d + '"/>';
       else if (k === 'wire') s += '<path class="bp-wire" d="' + d + '"/>';
@@ -642,7 +834,7 @@
         s += ln('M' + r2(tip[0] - dx * 8 - dy * 4.5) + ' ' + r2(tip[1] - dy * 8 + dx * 4.5) + ' L' + r2(tip[0]) + ' ' + r2(tip[1]) + ' L' + r2(tip[0] - dx * 8 + dy * 4.5) + ' ' + r2(tip[1] - dy * 8 - dx * 4.5));
       });
       if (l.label) {
-        var at = polyAt(X.pts, l.labelPos != null ? l.labelPos : 0.5), horiz = Math.abs(at.dx) >= Math.abs(at.dy), tw = String(l.label).length * 6.3 + 6;
+        var at = polyAt(X.pts, fin(num(l.labelPos)) ? num(l.labelPos) : 0.5), horiz = Math.abs(at.dx) >= Math.abs(at.dy), tw = String(l.label).length * 6.3 + 6;
         var lx = horiz ? at.x : at.x + 8, ly = horiz ? at.y - (k === 'pipe' ? 9 : 6) : at.y + 3.3, an = horiz ? 'middle' : 'start';
         var bx = an === 'middle' ? lx - tw / 2 : lx - 3;
         s += '<rect class="bp-pf" data-k="lbg" x="' + r2(bx) + '" y="' + r2(ly - 9) + '" width="' + r2(tw) + '" height="12"/><text class="bp-tx bp-mu" data-k="label" x="' + r2(lx) + '" y="' + r2(ly) + '" text-anchor="' + an + '">' + esc(l.label) + '</text>';
@@ -662,8 +854,10 @@
         (m.kind === 'fail' ? '<path d="M-3.4 -3.4 L3.4 3.4 M3.4 -3.4 L-3.4 3.4" style="fill:none;stroke:' + c + ';stroke-width:2;stroke-linecap:round"/>' : '<path d="M-3.8 0.2 L-1 3 L4 -3" style="fill:none;stroke:' + c + ';stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/>') + '</g>';
     });
     tl.notes.forEach(function (m, i) {
-      var n = m.n, p = Array.isArray(n.at) ? { x: n.at[0], y: n.at[1], side: null } : L.lines[n.at] ? (function (q) { return { x: q.x, y: q.y, side: 'n' }; })(polyAt(L.lines[n.at].pts, n.pos != null ? n.pos : 0.5)) : port(n.at, L.parts), dx = n.dx != null ? n.dx : (p.side && p.side.indexOf('w') >= 0 ? -6 : 6), dy = n.dy != null ? n.dy : (p.side === 'n' ? -6 : p.side === 's' ? 14 : 3);
-      var an = n.anchor || (dx < 0 ? 'end' : p.side === 'n' || p.side === 's' ? 'middle' : 'start');
+      var n = m.n, pos = fin(num(n.pos)) ? num(n.pos) : 0.5, ndx = num(n.dx), ndy = num(n.dy);
+      var p = !Array.isArray(n.at) && L.lines[n.at] ? (function (q) { return { x: q.x, y: q.y, side: 'n' }; })(polyAt(L.lines[n.at].pts, pos)) : port(n.at, L.parts);
+      var dx = fin(ndx) ? ndx : (p.side && p.side.indexOf('w') >= 0 ? -6 : 6), dy = fin(ndy) ? ndy : (p.side === 'n' ? -6 : p.side === 's' ? 14 : 3);
+      var an = ANCHORS.indexOf(n.anchor) >= 0 ? n.anchor : (dx < 0 ? 'end' : p.side === 'n' || p.side === 's' ? 'middle' : 'start');
       o += '<text class="bp-note" data-k="note' + i + '" opacity="0" x="' + r2(p.x + dx) + '" y="' + r2(p.y + dy) + '" text-anchor="' + an + '">' + String(n.text).split('\n').map(function (t, j) { return '<tspan x="' + r2(p.x + dx) + '" dy="' + (j ? 11 : 0) + '">' + esc(t) + '</tspan>'; }).join('') + '</text>';
     });
     tl.runs.forEach(function (R, i) {
@@ -700,6 +894,7 @@
     return r;
   }
 
+  // Scenes that are playing and on screen. The frame loop stops when it is empty.
   var live = new Set(), raf = 0, lastNow = 0;
   function loop(now) {
     var dt = lastNow ? Math.min(0.1, (now - lastNow) / 1000) : 0; lastNow = now;
@@ -708,16 +903,85 @@
   }
   function wake() { if (!raf && live.size) { lastNow = 0; raf = root.requestAnimationFrame(loop); } }
 
+  // Write an attribute or style only when its value changed.
+  function sa(el, k, v) { var c = el.__bpa || (el.__bpa = {}); if (c[k] === v) return; c[k] = v; el.setAttribute(k, v); }
+  function ss(el, k, v) { var c = el.__bps || (el.__bps = {}); if (c[k] === v) return; c[k] = v; el.style[k] = v; }
+
+  // A belt moves while something runs on it: once per run (not per copy), at
+  // one speed, in the direction of the run that started last.
+  function beltSegs(runs) {
+    var byRun = dict(), list = [], cuts = [], segs = [];
+    runs.forEach(function (R) {
+      var g = byRun[R.rid];
+      if (!g) { g = byRun[R.rid] = { a: R.a, b: R.b, s: (R.r.back || R.r.dir === -1) ? -1 : 1 }; list.push(g); }
+      else { g.a = Math.min(g.a, R.a); g.b = Math.max(g.b, R.b); }
+    });
+    list.forEach(function (g) { cuts.push(g.a, g.b); });
+    cuts.sort(function (x, y) { return x - y; });
+    for (var i = 0; i < cuts.length - 1; i++) {
+      var u = cuts[i], v = cuts[i + 1], act = null;
+      if (v - u < 1e-9) continue;
+      list.forEach(function (g) { if (g.a <= u && g.b >= v && (!act || g.a >= act.a)) act = g; });
+      if (act) segs.push({ a: u, b: v, s: act.s });
+    }
+    return segs;
+  }
+
+  var MODES = ['loop', 'view', 'click', 'still'];
+  var SPEED_MIN = 0.1, SPEED_MAX = 10;
+
+  // A scene that cannot be drawn shows why, in the sheet's colours, instead of
+  // leaving the element blank.
+  function showError(host, e, spec, opts) {
+    if (!HAS_DOM || !host || typeof host.appendChild !== 'function') return;
+    injectCSS();
+    Array.prototype.slice.call(host.children || []).forEach(function (c) { if (c.className === 'bp-err') host.removeChild(c); });
+    var paper = (opts && opts.paper) || (isObj(spec) && spec.paper), T = paper === 'linen' ? THEMES.linen : THEMES.blue;
+    var box = document.createElement('div'); box.className = 'bp-err'; box.setAttribute('role', 'alert');
+    box.style.background = T.bg; box.style.color = T.ink; box.style.borderColor = T.ink;
+    var hd = document.createElement('div'); hd.className = 'bp-err-hd'; hd.textContent = 'BLUEPRINT · THIS SCENE COULD NOT BE DRAWN';
+    var msg = document.createElement('div');
+    msg.textContent = (isObj(spec) && spec.title ? String(spec.title) + ': ' : '') + String((e && e.message) || e);
+    box.appendChild(hd); box.appendChild(msg); host.appendChild(box);
+  }
+
   function mount(host, spec, opts) {
     opts = opts || {};
-    injectCSS(opts.font !== false);
-    var theme = Object.assign({}, THEMES[opts.paper || spec.paper || 'blue'] || THEMES.blue, spec.colors || {}, opts.colors || {});
+    var held = { wrap: null, ctl: null };
+    try { return mountScene(host, spec, opts, held); }
+    catch (e) {
+      try { if (held.ctl) held.ctl.destroy(); else if (held.wrap && held.wrap.parentNode) held.wrap.parentNode.removeChild(held.wrap); } catch (e2) { /* keep the first error */ }
+      showError(host, e, spec, opts);
+      if (root.console) root.console.error('[blueprint] could not draw ' + (isObj(spec) && spec.title ? '"' + spec.title + '"' : 'the scene') + ': ' + ((e && e.message) || e));
+      throw e;
+    }
+  }
+
+  function mountScene(host, spec, opts, held) {
+    if (!host || typeof host.appendChild !== 'function') throw new Error('mount(el, spec): el must be an element');
+    if (!isObj(spec)) throw new Error('mount(el, spec): no scene to draw (the spec is ' + (spec === null ? 'null' : typeof spec) + ')');
+    injectCSS();
+    if (opts.font !== false) injectFont();
+    var extra = [], theme = resolveTheme(spec, opts, extra);
+    var mode = opts.play || 'loop';
+    if (MODES.indexOf(mode) < 0) { extra.push('unknown play "' + mode + '" (use ' + MODES.join(', ') + '); using loop'); mode = 'loop'; }
+    var speed = opts.speed == null ? 1 : num(opts.speed);
+    if (!fin(speed) || speed <= 0) { extra.push('speed ' + JSON.stringify(opts.speed) + ' is not a positive number; using 1'); speed = 1; }
+    else if (speed < SPEED_MIN || speed > SPEED_MAX) { extra.push('speed ' + speed + ' is outside ' + SPEED_MIN + '…' + SPEED_MAX + '; clamped'); speed = clamp(speed, SPEED_MIN, SPEED_MAX); }
     var B = build(spec, theme), L = B.L, tl = B.tl;
-    if (L.errors.length && root.console) root.console.warn('[blueprint] ' + (spec.title || '') + '\n  ' + L.errors.join('\n  '));
-    var wrap = document.createElement('div'); wrap.className = 'bp-wrap'; wrap.innerHTML = B.markup;
+    extra.forEach(function (w) { L.warnings.push(w); });
+    if (root.console) {
+      var name = '[blueprint] ' + (spec.title || '');
+      if (L.errors.length) root.console.error(name + '\n  ' + L.errors.join('\n  '));
+      if (L.warnings.length) root.console.warn(name + '\n  ' + L.warnings.join('\n  '));
+    }
+    var wrap = document.createElement('div'); wrap.className = 'bp-wrap'; wrap.innerHTML = B.markup; held.wrap = wrap;
     var svg = wrap.firstChild, q = function (sel, el) { return (el || svg).querySelector(sel); };
-    var reduce = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    svg.setAttribute('aria-label', (spec.title ? spec.title + '. ' : '') + tl.steps.map(function (s, i) { return 'Step ' + (i + 1) + ': ' + s.say; }).join(' '));
+    var mq = root.matchMedia ? root.matchMedia('(prefers-reduced-motion: reduce)') : null, reduce = !!(mq && mq.matches);
+    var description = (spec.title ? spec.title + '. ' : '') + tl.steps.map(function (s, i) { return 'Step ' + (i + 1) + ': ' + s.say; }).join(' ');
+    var keyboard = opts.controls === false;
+    function setLabel() { svg.setAttribute('aria-label', description + (keyboard ? (reduce ? ' Press Space or Enter to show the next step.' : ' Press Space or Enter to play or pause.') : '')); }
+    setLabel();
     // cache nodes
     var keyed = function (el) { var k = {}; Array.prototype.forEach.call(el.querySelectorAll('[data-k]'), function (n) { k[n.getAttribute('data-k')] = n; }); return k; };
     var parts = L.order.map(function (pid) {
@@ -732,10 +996,10 @@
       };
     });
     var lines = Object.keys(L.lines).map(function (lid) {
-      var el = q('[data-line="' + lid + '"]');
-      return { id: lid, el: el, path: q('[data-k="path"]', el), belt: q('[data-k="belt"]', el), lns: el.querySelectorAll('.bp-ln'), soft: el.querySelectorAll('.bp-wire,[data-k="label"],[data-k="lbg"]'), draws: tl.draws[lid], runs: tl.runs.filter(function (R) { return R.r.on === lid; }) };
+      var el = q('[data-line="' + lid + '"]'), runsOn = tl.runs.filter(function (R) { return R.r.on === lid; });
+      return { id: lid, el: el, path: q('[data-k="path"]', el), belt: q('[data-k="belt"]', el), lns: el.querySelectorAll('.bp-ln'), soft: el.querySelectorAll('.bp-wire,[data-k="label"],[data-k="lbg"]'), draws: tl.draws[lid], runs: runsOn, beltSegs: beltSegs(runsOn) };
     });
-    var lineById = {}; lines.forEach(function (x) { lineById[x.id] = x; });
+    var lineById = dict(); lines.forEach(function (x) { lineById[x.id] = x; });
     var glows = tl.glows.map(function (g, i) { return { g: g, el: q('[data-k="glow' + i + '"]') }; });
     var marks = tl.marks.map(function (m, i) { return { m: m, el: q('[data-k="mark' + i + '"]') }; });
     var notes = tl.notes.map(function (m, i) { return { m: m, el: q('[data-k="note' + i + '"]') }; });
@@ -749,30 +1013,30 @@
 
     function update(t) {
       var fade = t > tl.total ? 1 - seg(t, tl.total, tl.period - 0.15) : 1;
-      all.setAttribute('opacity', r2(fade));
+      sa(all, 'opacity', r2(fade));
       // camera
       var vr = [0, 0, L.W, L.H];
       views.forEach(function (v) { if (t >= v.a) { var k = seg(t, v.a, v.b); vr = vr.map(function (x, i) { return x + (v.r[i] - x) * k; }); } });
-      cam.setAttribute('viewBox', vr.map(r2).join(' '));
+      sa(cam, 'viewBox', vr.map(r2).join(' '));
       // parts
       parts.forEach(function (x) {
         var ds = drawState(x.draws, t), d = ds.d;
-        x.el.setAttribute('opacity', r2(ds.o));
-        x.el.style.display = (d <= 0.001 && ds.first) ? 'none' : '';
-        for (var i = 0; i < x.lns.length; i++) x.lns[i].style.strokeDashoffset = r2(1 - d);
+        sa(x.el, 'opacity', r2(ds.o));
+        ss(x.el, 'display', (d <= 0.001 && ds.first) ? 'none' : '');
+        for (var i = 0; i < x.lns.length; i++) ss(x.lns[i], 'strokeDashoffset', r2(1 - d));
         var fo = r2(clamp((d - 0.15) / 0.55));
-        for (var j = 0; j < x.fills.length; j++) x.fills[j].style.opacity = fo;
-        if (x.label) x.label.style.opacity = fo;
+        for (var j = 0; j < x.fills.length; j++) ss(x.fills[j], 'opacity', fo);
+        if (x.label) ss(x.label, 'opacity', fo);
         if (x.lead) {
           var lp = ds.first ? seg(t, ds.first.b - 0.25, ds.first.b + 0.35) : 1;
-          for (var m = 0; m < x.leadLn.length; m++) x.leadLn[m].style.strokeDashoffset = r2(1 - lp);
-          x.leadTx.style.opacity = r2(clamp((lp - 0.5) * 2));
+          for (var m = 0; m < x.leadLn.length; m++) ss(x.leadLn[m], 'strokeDashoffset', r2(1 - lp));
+          ss(x.leadTx, 'opacity', r2(clamp((lp - 0.5) * 2)));
         }
         // shake on fail
         var jx = 0; x.fails.forEach(function (f) { var k = trap(t, f.a, f.a + 0.55, 0.1); if (k) jx += Math.sin((t - f.a) * 60) * 2.2 * k; });
         x.ringAmt = 0; x.rings.forEach(function (r) { x.ringAmt = Math.max(x.ringAmt, trap(t, r.a, r.b, 0.15)); });
         if (x.P.p.kind !== 'bell' && x.ringAmt) jx += Math.sin(t * 50) * 1.6 * x.ringAmt;
-        x.el.setAttribute('transform', 'translate(' + r2(x.P.box.x + jx) + ' ' + r2(x.P.box.y) + ')');
+        sa(x.el, 'transform', 'translate(' + r2(x.P.box.x + jx) + ' ' + r2(x.P.box.y) + ')');
         var S = {
           p: x.P.p, t: t, ring: x.ringAmt,
           spin: (x.P.p.angle || 0) + spinAt(x.spins, t, x.P.p.rate || (x.P.p.kind === 'clock' ? 1.2 : 0.7)),
@@ -792,46 +1056,58 @@
       // lines
       lines.forEach(function (x) {
         var ds = drawState(x.draws, t), d = ds.d;
-        x.el.setAttribute('opacity', r2(ds.o));
-        x.el.style.display = (d <= 0.001 && ds.first) ? 'none' : '';
-        for (var i = 0; i < x.lns.length; i++) x.lns[i].style.strokeDashoffset = r2(1 - d);
-        for (var j = 0; j < x.soft.length; j++) x.soft[j].style.opacity = r2(clamp((d - 0.3) / 0.5));
-        if (x.belt) { var mv = 0; x.runs.forEach(function (R) { mv += Math.max(0, Math.min(t, R.b) - R.a); }); x.belt.style.strokeDashoffset = r2(-mv * 22 * (x.runs[0] && (x.runs[0].r.back || x.runs[0].r.dir === -1) ? -1 : 1)); x.belt.style.opacity = r2(0.55 * clamp((d - 0.5) * 2)); }
+        sa(x.el, 'opacity', r2(ds.o));
+        ss(x.el, 'display', (d <= 0.001 && ds.first) ? 'none' : '');
+        for (var i = 0; i < x.lns.length; i++) ss(x.lns[i], 'strokeDashoffset', r2(1 - d));
+        for (var j = 0; j < x.soft.length; j++) ss(x.soft[j], 'opacity', r2(clamp((d - 0.3) / 0.5)));
+        if (x.belt) {
+          var mv = 0; x.beltSegs.forEach(function (g) { mv += g.s * Math.max(0, Math.min(t, g.b) - g.a); });
+          ss(x.belt, 'strokeDashoffset', r2(-mv * 22)); ss(x.belt, 'opacity', r2(0.55 * clamp((d - 0.5) * 2)));
+        }
       });
-      glows.forEach(function (x) { x.el.setAttribute('opacity', r2(trap(t, x.g.a, x.g.b, 0.25))); });
-      marks.forEach(function (x) { x.el.setAttribute('opacity', r2(t >= x.m.a && t < x.m.b ? Math.min(seg(t, x.m.a, x.m.a + 0.25), 1 - seg(t, x.m.b - 0.25, x.m.b)) : 0)); });
-      notes.forEach(function (x) { x.el.setAttribute('opacity', r2(t >= x.m.a && t < x.m.b ? Math.min(seg(t, x.m.a, x.m.a + 0.35), x.m.b === Infinity ? 1 : 1 - seg(t, x.m.b - 0.3, x.m.b)) : 0)); });
+      glows.forEach(function (x) { sa(x.el, 'opacity', r2(trap(t, x.g.a, x.g.b, 0.25))); });
+      marks.forEach(function (x) { sa(x.el, 'opacity', r2(t >= x.m.a && t < x.m.b ? Math.min(seg(t, x.m.a, x.m.a + 0.25), 1 - seg(t, x.m.b - 0.25, x.m.b)) : 0)); });
+      notes.forEach(function (x) { sa(x.el, 'opacity', r2(t >= x.m.a && t < x.m.b ? Math.min(seg(t, x.m.a, x.m.a + 0.35), x.m.b === Infinity ? 1 : 1 - seg(t, x.m.b - 0.3, x.m.b)) : 0)); });
       runs.forEach(function (x) {
         var R = x.R, r = R.r;
-        if (t < R.a || t > R.b + (r.stay ? 1e9 : 0.2)) { x.el.setAttribute('opacity', 0); return; }
-        if (r.stay && t > R.b && tl.steps[R.step] && t > tl.steps[R.step].b) { x.el.setAttribute('opacity', 0); return; }
+        if (t < R.a || t > R.b + (r.stay ? 1e9 : 0.2)) { sa(x.el, 'opacity', 0); return; }
+        if (r.stay && t > R.b && tl.steps[R.step] && t > tl.steps[R.step].b) { sa(x.el, 'opacity', 0); return; }
         if (!x.len) x.len = x.path.getTotalLength();
-        var span = r.span || [0, 1], k = lin(t, R.a, R.b); k = r.ease === 'linear' ? k : ease(k);
+        var span = Array.isArray(r.span) ? r.span : [0, 1], k = lin(t, R.a, R.b); k = r.ease === 'linear' ? k : ease(k);
         var back = r.back || r.dir === -1, f = span[0] + (span[1] - span[0]) * k; if (back) f = 1 - f;
         var p = x.path.getPointAtLength(x.len * clamp(f));
         var op = t > R.b ? (r.stay ? 1 : 1 - lin(t, R.b, R.b + 0.2)) : Math.min(1, lin(t, R.a, R.a + 0.12));
-        x.el.setAttribute('opacity', r2(op));
-        x.el.setAttribute('transform', 'translate(' + r2(p.x) + ' ' + r2(p.y) + ')');
+        sa(x.el, 'opacity', r2(op));
+        sa(x.el, 'transform', 'translate(' + r2(p.x) + ' ' + r2(p.y) + ')');
       });
       // caption
       var si = t > tl.total ? tl.steps.length - 1 : stepAt(t);
       var text = si >= 0 ? tl.steps[si].say : '';
       if (text !== lastCap) {
-        lastCap = text; var rows = wrapCaption(String(text).toUpperCase(), capMax);
-        cap.setAttribute('y', B.OH - (rows.length > 1 ? 31 : 25));
-        cap.innerHTML = rows.map(function (s, i) { return '<tspan x="22" dy="' + (i ? 13 : 0) + '">' + esc(s) + '</tspan>'; }).join('');
+        lastCap = text; var rows = wrapCaption(String(text).toUpperCase(), capMax), dy = rows.length > 2 ? 11 : 13;
+        cap.setAttribute('y', B.OH - (rows.length > 2 ? 37 : rows.length > 1 ? 31 : 25));
+        cap.innerHTML = rows.map(function (s, i) { return '<tspan x="22" dy="' + (i ? dy : 0) + '">' + esc(s) + '</tspan>'; }).join('');
       }
-      cap.setAttribute('opacity', r2((si >= 0 ? seg(t, tl.steps[si].a, tl.steps[si].a + 0.35) : 0) * fade));
+      sa(cap, 'opacity', r2((si >= 0 ? seg(t, tl.steps[si].a, tl.steps[si].a + 0.35) : 0) * fade));
       if (si !== lastStep) { lastStep = si; pos.textContent = si >= 0 ? (si + 1) + ' / ' + tl.steps.length : ''; ctl.onStep(si); }
     }
 
+    // Under reduced motion nothing tweens: playing shows the end of the next step.
+    function nextStill() {
+      var n = tl.steps.length;
+      if (!n) { ctl.seek(tl.total); return; }
+      var i = stepAt(ctl.t), lastEnd = tl.steps[n - 1].b - 0.05;
+      ctl.seek(tl.steps[i < 0 || ctl.t >= lastEnd - 1e-6 ? 0 : i + 1].b - 0.05);
+    }
+
     // controls
-    var bar = null, dots = [], playBtn = null;
+    var bar = null, dots = [], playBtn = null, io = null;
     var ctl = {
-      t: 0, playing: false, stopAt: null, visible: true, mode: opts.play || 'loop', speed: opts.speed || 1,
+      t: 0, playing: false, stopAt: null, visible: true, destroyed: false, mode: mode, speed: speed,
       onStep: function (si) {
         dots.forEach(function (d, i) { if (i === si) d.setAttribute('aria-current', 'step'); else d.removeAttribute('aria-current'); });
       },
+      _live: function () { if (this.playing && this.visible && !this.destroyed) { live.add(this); wake(); } else live.delete(this); },
       _tick: function (dt) {
         if (!this.playing || !this.visible) return;
         this.t += dt * this.speed;
@@ -840,20 +1116,35 @@
         else if (this.t >= tl.period) this.t = 0;
         update(this.t);
       },
-      play: function () { if (reduce) return; if (this.t >= tl.total && this.mode !== 'loop') this.t = 0; this.playing = true; live.add(this); wake(); syncBtn(); },
-      pause: function () { this.playing = false; live.delete(this); syncBtn(); },
-      toggle: function () { this.playing ? this.pause() : (this.stopAt = null, this.play()); },
-      seek: function (t) { this.t = clamp(t, 0, tl.period); update(this.t); },
+      _run: function () { if (this.destroyed) return; if (this.t >= tl.total && this.mode !== 'loop') this.t = 0; this.playing = true; this._live(); syncBtn(); },
+      play: function () { if (this.destroyed) return; this.stopAt = null; if (reduce) { nextStill(); return; } this._run(); },
+      pause: function () { this.playing = false; this._live(); syncBtn(); },
+      toggle: function () { if (this.playing) this.pause(); else this.play(); },
+      seek: function (t) { if (this.destroyed) return; t = num(t); if (!fin(t)) return; this.t = clamp(t, 0, tl.period); update(this.t); },
       step: function (i) {
-        i = clamp(i, 0, tl.steps.length - 1); var s = tl.steps[i];
-        if (reduce) { this.seek(s.b - 0.05); return; }
-        this.seek(s.a); this.stopAt = s.b - 0.05; this.play();
+        i = Math.floor(num(i));
+        if (this.destroyed || !tl.steps.length || !fin(i)) return;
+        var s = tl.steps[clamp(i, 0, tl.steps.length - 1)];
+        if (reduce) { this.pause(); this.seek(s.b - 0.05); return; }
+        this.seek(s.a); this.stopAt = s.b - 0.05; this._run();
       },
       stepIndex: function () { return stepAt(this.t); },
       timeline: tl, layout: L,
-      destroy: function () { this.pause(); if (io) io.disconnect(); wrap.remove(); }
+      destroy: function () {
+        if (this.destroyed) return;
+        this.pause(); this.destroyed = true; live.delete(this);
+        if (io) io.disconnect();
+        if (mq) { if (mq.removeEventListener) mq.removeEventListener('change', onMotion); else if (mq.removeListener) mq.removeListener(onMotion); }
+        svg.removeEventListener('click', onClick); svg.removeEventListener('keydown', onKey);
+        if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      }
     };
-    function syncBtn() { if (playBtn) { playBtn.textContent = ctl.playing ? 'PAUSE' : 'PLAY'; playBtn.setAttribute('aria-label', ctl.playing ? 'Pause' : 'Play'); } }
+    held.ctl = ctl;
+    function syncBtn() {
+      if (!playBtn) return;
+      if (reduce) { playBtn.textContent = 'STEP'; playBtn.setAttribute('aria-label', 'Show the next step'); return; }
+      playBtn.textContent = ctl.playing ? 'PAUSE' : 'PLAY'; playBtn.setAttribute('aria-label', ctl.playing ? 'Pause' : 'Play');
+    }
     if (opts.controls !== false) {
       bar = document.createElement('div'); bar.className = 'bp-bar';
       bar.innerHTML = '<button type="button" data-a="play">PLAY</button><button type="button" data-a="prev" aria-label="Previous step">&larr;</button><button type="button" data-a="next" aria-label="Next step">&rarr;</button><div class="bp-dots"></div>';
@@ -861,8 +1152,17 @@
       tl.steps.forEach(function (s, i) { var b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-label', 'Step ' + (i + 1) + ': ' + s.say); b.title = s.say; b.addEventListener('click', function () { ctl.step(i); }); dw.appendChild(b); dots.push(b); });
       playBtn = bar.querySelector('[data-a="play"]');
       playBtn.addEventListener('click', function () { ctl.toggle(); });
-      bar.querySelector('[data-a="prev"]').addEventListener('click', function () { var i = stepAt(ctl.t); var s = tl.steps[i]; ctl.step(s && ctl.t - s.a < 0.6 ? i - 1 : i); });
-      bar.querySelector('[data-a="next"]').addEventListener('click', function () { ctl.step(stepAt(ctl.t) + 1); });
+      bar.querySelector('[data-a="prev"]').addEventListener('click', function () {
+        if (!tl.steps.length) return;
+        var i = stepAt(ctl.t), s = tl.steps[i]; ctl.step(s && ctl.t - s.a < 0.6 ? i - 1 : i);
+      });
+      bar.querySelector('[data-a="next"]').addEventListener('click', function () {
+        var n = tl.steps.length; if (!n) return;
+        var i = stepAt(ctl.t), lastEnd = tl.steps[n - 1].b - 0.05;
+        if (ctl.t >= lastEnd - 1e-6) ctl.step(0);                    // finished or fading out: start again
+        else if (i >= n - 1 && !reduce) { ctl.pause(); ctl.seek(lastEnd); } // in the last step: finish it
+        else ctl.step(i + 1);
+      });
       wrap.appendChild(bar);
     }
     if (opts.key) {
@@ -873,25 +1173,34 @@
         wrap.appendChild(ol);
       }
     }
-    svg.addEventListener('click', function () { ctl.toggle(); });
+    function onClick() { ctl.toggle(); }
+    function onKey(e) { if (e.key === ' ' || e.key === 'Enter' || e.key === 'Spacebar') { e.preventDefault(); ctl.toggle(); } }
+    svg.addEventListener('click', onClick);
+    if (keyboard) { svg.setAttribute('role', 'button'); svg.setAttribute('tabindex', '0'); svg.addEventListener('keydown', onKey); }
+    function onMotion() {
+      var was = reduce; reduce = !!mq.matches;
+      if (reduce === was || ctl.destroyed) return;
+      if (reduce) { var i = stepAt(ctl.t); ctl.pause(); ctl.stopAt = null; ctl.seek(i >= 0 && ctl.t <= tl.total ? tl.steps[i].b - 0.05 : tl.total); }
+      else if (ctl.mode === 'loop') ctl._run();
+      setLabel(); syncBtn();
+    }
+    if (mq) { if (mq.addEventListener) mq.addEventListener('change', onMotion); else if (mq.addListener) mq.addListener(onMotion); }
     host.appendChild(wrap);
 
-    var io = null;
-    if (reduce || ctl.mode === 'still') { ctl.seek(tl.total); }
-    else {
-      ctl.seek(ctl.mode === 'loop' ? 0 : 0);
-      if ('IntersectionObserver' in root) {
-        var played = false;
-        io = new root.IntersectionObserver(function (es) {
-          es.forEach(function (e) {
-            ctl.visible = e.isIntersecting;
-            if (e.isIntersecting && ctl.mode === 'view' && !played) { played = true; ctl.play(); }
-          });
-        }, { threshold: 0.35 });
-        io.observe(svg);
-      }
-      if (ctl.mode === 'loop') ctl.play();
+    if (reduce || ctl.mode === 'still') ctl.seek(tl.total);
+    else ctl.seek(0);
+    // Off-screen scenes leave the frame loop; 'view' scenes start on first sight.
+    if ('IntersectionObserver' in root) {
+      var played = false;
+      io = new root.IntersectionObserver(function (es) {
+        es.forEach(function (e) {
+          ctl.visible = e.isIntersecting; ctl._live();
+          if (e.isIntersecting && ctl.mode === 'view' && !played && !reduce) { played = true; ctl.play(); }
+        });
+      }, { threshold: 0.35 });
+      io.observe(svg);
     }
+    if (!reduce && ctl.mode === 'loop') ctl.play();
     syncBtn();
     return ctl;
   }
@@ -905,20 +1214,23 @@
   if (HAS_DOM && root.customElements && !root.customElements.get('blueprint-scene')) {
     var BlueprintScene = class extends HTMLElement {
       connectedCallback() {
-        var self = this; if (self._c) return;
+        var self = this; if (self._c || self._wait) return;
         var id = self.getAttribute('scene');
         var go = function () {
           if (self._c || !self.isConnected) return;
           self._c = mount(self, SCENES[id], {
             play: self.getAttribute('play') || 'loop', paper: self.getAttribute('paper') || undefined,
             controls: !self.hasAttribute('no-controls'), key: self.hasAttribute('key'), font: !self.hasAttribute('no-font'),
-            speed: self.hasAttribute('speed') ? +self.getAttribute('speed') : 1
+            speed: self.hasAttribute('speed') ? self.getAttribute('speed') : 1
           });
         };
         if (SCENES[id]) go();
-        else { var h = function (e) { if (e.detail === id) { root.removeEventListener('blueprint:scene', h); go(); } }; root.addEventListener('blueprint:scene', h); }
+        else { self._wait = function (e) { if (e.detail === id) { root.removeEventListener('blueprint:scene', self._wait); self._wait = null; go(); } }; root.addEventListener('blueprint:scene', self._wait); }
       }
-      disconnectedCallback() { if (this._c) { this._c.destroy(); this._c = null; } }
+      disconnectedCallback() {
+        if (this._wait) { root.removeEventListener('blueprint:scene', this._wait); this._wait = null; }
+        if (this._c) { this._c.destroy(); this._c = null; }
+      }
     };
     root.customElements.define('blueprint-scene', BlueprintScene);
   }
