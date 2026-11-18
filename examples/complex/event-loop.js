@@ -6,14 +6,14 @@ BLUEPRINT.scene('event-loop', {
   parts: [
     { id: 'script', kind: 'book', at: [90, 130], size: [100, 70], lines: 5, max: 5, label: 'MAIN.JS', labelAt: 'n', n: 1, lead: 'sw', name: 'Script', note: 'five lines: log A, setTimeout, fetch, a promise, log B' },
     { id: 'thread', kind: 'zone', at: [250, 215], size: [170, 330], label: 'MAIN THREAD' },
-    { id: 'tray', kind: 'zone', at: [250, 150], size: [100, 120], label: 'CALL STACK' },
-    { id: 'stack', kind: 'stack', at: [250, 154], size: [76, 100], max: 4, count: 0, n: 2, lead: 'ne', leadLen: 30, name: 'Call stack', note: 'the one place code runs, one call at a time' },
+    { id: 'tray', kind: 'zone', at: [250, 146], size: [100, 128], label: 'CALL STACK' },
+    { id: 'stack', kind: 'stack', at: [250, 154], size: [76, 100], max: 4, count: 0, n: 2, lead: 'e', leadLen: 30, name: 'Call stack', note: 'the one place code runs, one call at a time' },
     { id: 'console', kind: 'screen', at: [90, 320], size: [120, 80], label: 'CONSOLE', n: 3, lead: 'nw', name: 'Console', note: 'where log() prints; it ends up reading A B p t f' },
     { id: 'zone', kind: 'zone', at: [620, 145], size: [300, 210], label: 'BROWSER' },
     { id: 'clock', kind: 'clock', at: [690, 120], size: [46, 46], label: 'TIMER', labelAt: 'n', n: 4, lead: 'sw', name: 'Timer', note: 'the browser counts down setTimeout(t, 0) off the stack' },
     { id: 'tower', kind: 'tower', at: [560, 180], size: [40, 84], label: 'NETWORK', labelAt: 'e', n: 5, lead: [34, 28], name: 'Network', note: 'the browser waits ~80 ms for the fetch reply' },
     { id: 'tq', kind: 'queue', at: [450, 350], size: [150, 30], slots: 4, count: 0, label: 'TASK QUEUE', n: 6, lead: 'se', name: 'Task queue', note: 'timer and event callbacks wait here, one per turn' },
-    { id: 'mq', kind: 'queue', at: [450, 290], size: [150, 30], slots: 4, count: 0, label: 'MICROTASKS', n: 7, lead: [44, -30], name: 'Microtask queue', note: 'promise callbacks wait here and always go first' },
+    { id: 'mq', kind: 'queue', at: [450, 290], size: [150, 30], slots: 4, count: 0, label: 'MICROTASKS', n: 7, lead: [44, -22], name: 'Microtask queue', note: 'promise callbacks wait here and always go first' },
     { id: 'loop', kind: 'wheel', at: [250, 320], size: [56, 56], label: 'EVENT LOOP', n: 8, lead: 'nw', name: 'Event loop', note: 'moves one callback onto the stack, but only when it is empty' }
   ],
   lines: [
@@ -22,7 +22,7 @@ BLUEPRINT.scene('event-loop', {
     { id: 'toTimer', from: 'stack.e-34', to: 'clock.w', label: 'HAND OFF', labelPos: 0.3 },
     { id: 'toNet', from: 'stack.e+26', to: 'tower.w' },
     { id: 'timerCb', from: 'clock.e', to: 'tq.e', via: [[745, 120], [745, 350]], arrow: true },
-    { id: 'netCb', from: 'tower.s', to: 'mq.e', arrow: true, label: '.THEN', labelPos: 0.3 },
+    { id: 'netCb', from: 'tower.s', to: 'mq.e', arrow: true, label: '.THEN', labelPos: 0.55 },
     { id: 'promise', from: 'stack.e+45', to: 'mq.n', kind: 'wire', arrow: true },
     { id: 'fromMq', from: 'mq.w', to: 'loop.e-14' },
     { id: 'fromTq', from: 'tq.w', to: 'loop.e+14' },
@@ -122,7 +122,7 @@ BLUEPRINT.scene('event-loop', {
       then: { ok: ['console'] },
       note: [
         { at: 'console.s', text: 'PRINTED: A B p t f', dy: 14 },
-        { at: [258, 244], text: 'ONE PER TURN', anchor: 'start' }
+        { at: [244, 244], text: 'ONE PER TURN', anchor: 'end' }
       ],
       hold: 2.6
     }

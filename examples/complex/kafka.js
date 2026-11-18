@@ -6,10 +6,10 @@ BLUEPRINT.scene('kafka', {
   size: [800, 400],
   parts: [
     { id: 'producer', kind: 'screen', at: [80, 200], size: [104, 76], label: 'CHECKOUT', n: 1, lead: 'nw', name: 'Producer', note: 'checkout emits one event per paid order, ~5,000 a second' },
-    { id: 'topic', kind: 'zone', at: [370, 200], size: [170, 310], label: 'TOPIC: ORDERS' },
-    { id: 'p0', kind: 'book', at: [380, 100], size: [96, 56], lines: 2, max: 8, label: 'PARTITION 0', n: 2, lead: 'ne', name: 'Partition', note: 'P0, P1, P2: lists that only grow at the end, kept 7 days; each event has an offset' },
-    { id: 'p1', kind: 'book', at: [380, 200], size: [96, 56], lines: 3, max: 8, label: 'PARTITION 1' },
-    { id: 'p2', kind: 'book', at: [380, 300], size: [96, 56], lines: 2, max: 8, label: 'PARTITION 2' },
+    { id: 'topic', kind: 'zone', at: [362, 200], size: [136, 310], label: 'TOPIC: ORDERS' },
+    { id: 'p0', kind: 'book', at: [372, 100], size: [96, 56], lines: 2, max: 8, label: 'PARTITION 0', n: 2, lead: [34, -32], name: 'Partition', note: 'P0, P1, P2: lists that only grow at the end, kept 7 days; each event has an offset' },
+    { id: 'p1', kind: 'book', at: [372, 200], size: [96, 56], lines: 3, max: 8, label: 'PARTITION 1' },
+    { id: 'p2', kind: 'book', at: [372, 300], size: [96, 56], lines: 2, max: 8, label: 'PARTITION 2' },
     { id: 'switch', kind: 'switch', at: [210, 200], size: [48, 48], outs: [-40, 0, 40], to: 1, label: 'KEY HASH', n: 3, lead: 'n', name: 'Key hash', note: 'hash(customer id) mod 3 picks the partition, so one customer stays in order' },
     { id: 'group', kind: 'zone', at: [590, 200], size: [140, 310], label: 'GROUP: BILLING' },
     { id: 'ca', kind: 'box', at: [590, 100], size: [104, 50], label: 'CONSUMER A', n: 4, lead: 'ne', name: 'Consumer', note: 'A, B and C share the group BILLING; each reads one partition' },
@@ -26,7 +26,7 @@ BLUEPRINT.scene('kafka', {
     { id: 'r0', from: 'p0.e', to: 'ca.w', arrow: true },
     { id: 'r1', from: 'p1.e', to: 'cb.w', arrow: true },
     { id: 'r2', from: 'p2.e', to: 'cc.w', arrow: true },
-    { id: 'p1c', from: 'p1.e+16', to: 'cc.w-14', via: [[480, 216], [480, 286]], arrow: true, label: 'TAKEN OVER', labelPos: 0.45 },
+    { id: 'p1c', from: 'p1.e+16', to: 'cc.w-14', via: [[436, 216], [436, 286]], arrow: true, label: 'TAKEN OVER', labelPos: 0.25 },
     { id: 'c0', from: 'ca.e', to: 'cab.n', kind: 'wire' },
     { id: 'c1', from: 'cb.e', to: 'cab.w', kind: 'wire' },
     { id: 'c2', from: 'cc.e', to: 'cab.w+30', kind: 'wire', via: [[680, 300], [680, 230]] }

@@ -69,7 +69,7 @@ BLUEPRINT.scene('hash-map', {
         { on: 'mid', item: 'chip', text: '2', dur: 0.7, arrive: { set: { press: { down: 0, text: 'user:12 → 2' }, sw: { to: 2 } } } },
         { on: 'f2', item: 'chip', text: 'user:12', dur: 1.0, at: 2.4, arrive: { set: { b2: { fill: 2 } }, glow: ['b2'] } }
       ],
-      then: { note: { at: 'b2.s', text: 'A CLASH: CHECK 2 KEYS', dy: 16 } }
+      then: { note: { at: 'b2.s', text: 'A CLASH:\nCHECK 2 KEYS', dy: 16 } }
     },
     {
       say: 'One hash, one drawer: a lookup costs the same with 4 drawers or 4 million.',

@@ -17,7 +17,7 @@ BLUEPRINT.scene('emudhra', {
     { id: 'bank', kind: 'box', at: [700, 210], size: [120, 64], label: 'YOURBANK.IN', n: 2, lead: 'ne', name: 'Website', note: 'proves who it is with a certificate signed by a certificate authority' },
     { id: 'cert', kind: 'letter', at: [700, 130], size: [44, 30], labelAt: 'e', label: 'CERT', muted: true },
     { id: 'zone', kind: 'zone', at: [395, 100], size: [330, 150], label: 'EMUDHRA · CERTIFICATE AUTHORITY' },
-    { id: 'root', kind: 'box', at: [300, 95], size: [96, 48], hatch: false, label: 'ROOT G3', n: 3, lead: 'nw', name: 'Root', note: 'eMudhra’s top key, built into phones and browsers' },
+    { id: 'root', kind: 'box', at: [300, 95], size: [96, 48], hatch: false, label: 'ROOT G3', n: 3, lead: 's', name: 'Root', note: 'eMudhra’s top key, built into phones and browsers' },
     { id: 'inter', kind: 'box', at: [480, 95], size: [96, 48], label: 'SIGNER', n: 4, lead: 'ne', name: 'Intermediate signer', note: 'one of 8 keys the root vouched for; these sign website certificates' },
     { id: 'key', kind: 'key', at: [480, 142], size: [40, 16], label: 'PRIVATE KEY', n: 5, lead: 'e', leadLen: 16, name: 'Private key', note: 'the secret that makes a signature real; should be a random 384-bit number' },
     { id: 'stranger', kind: 'screen', at: [420, 350], size: [96, 62], label: 'STRANGER', n: 6, lead: 'e', name: 'Anyone', note: 'with the key, can sign a certificate for any website' },

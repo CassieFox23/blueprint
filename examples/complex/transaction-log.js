@@ -23,7 +23,7 @@ BLUEPRINT.scene('transaction-log', {
     { id: 'w0', from: 'db.e', to: 'j' },
     { id: 'ja', from: 'j', to: 'asha.s', bend: 'hv' },
     { id: 'jr', from: 'j', to: 'ravi.s-12', bend: 'hv', label: 'WRITE', labelPos: 0.62 },
-    { id: 'jl', from: 'j.s', to: 'log.w', label: 'FIRST', labelPos: 0.7 },
+    { id: 'jl', from: 'j.s', to: 'log.w', label: 'FIRST', labelPos: 0.5 },
     { id: 'shaft', from: 'log.e', to: 'gear.w', heavy: true },
     { id: 'rep', from: 'gear.n+12', to: 'ravi.s+12' }
   ],

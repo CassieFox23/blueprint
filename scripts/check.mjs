@@ -2,7 +2,8 @@
 // Lint a blueprint scene without a browser: unknown ids, bad steps, and the
 // layout problems a still frame makes obvious only once you look: parts that
 // overlap, lines that cut through a part, labels or numerals that collide or
-// fall off the sheet, captions that will not fit.
+// fall off the sheet, text across a zone's dashed border, a gate whose arm
+// swings into something, ✓/✕ badges that cover text, captions that will not fit.
 //
 //   node scripts/check.mjs examples/small/cache.js [more.js ...]
 //
@@ -78,6 +79,7 @@ for (const f of files) {
         const lb = box(x0, P.box.y + lg.y - 9, wMax, 11 * lg.lines.length + 1);
         const inside = lg.at === 'in' || lg.at === 'c' || lg.at === 'top';
         if (!inside) rects.push([`label of "${pid}"`, lb, pid]);
+        else if (P.p.kind === 'zone') rects.push([`the title of zone "${pid}"`, lb, pid]);   // drawn under parts, but nothing should cover it
         // Lines run under parts, and a part's paper fill hides them, so text inside a solid part
         // is safe. A free label, a zone's corner title (zones sit under lines) and every outside
         // label are not.
@@ -140,6 +142,48 @@ for (const f of files) {
         if (X.pts.some((q, k) => k && segHitsBox(X.pts[k - 1], q, tb))) warn.push(`line "${lid}" runs through ${nm} (move the text: "labelAt", "lead", the note's "dx"/"dy", or route the line with "via")`);
       }
       if (lineLabels[lid]) for (const [n, b] of rects) if (hit(lineLabels[lid], b, 1)) warn.push(`label of line "${lid}" overlaps ${n}`);
+    }
+    // Zones are drawn as dashed borders under everything: text should sit inside or outside one,
+    // never across its border.
+    const zones = L.order.filter(p => L.parts[p].p.kind === 'zone').map(p => [p, box(L.parts[p].box.x, L.parts[p].box.y, L.parts[p].box.w, L.parts[p].box.h)]);
+    const within = (a, b) => a.x >= b.x && a.y >= b.y && a.x + a.w <= b.x + b.w && a.y + a.h <= b.y + b.h;
+    for (const [zid, z] of zones) for (const [nm, b, owner] of texts) {
+      if (owner === zid) continue;
+      const tb = inset(b, 1.5);
+      if (hit(tb, z) && !within(tb, z)) warn.push(`${nm} sits on the border of zone "${zid}" (move it fully inside or outside)`);
+    }
+    // A gate's arm swings up to 76° out of its box when it opens: what it sweeps must be clear.
+    for (const pid of L.order) {
+      const P = L.parts[pid];
+      if (P.p.kind !== 'gate') continue;
+      const open = Math.min(1, Math.max(0, ...[P.p.open, ...(tl.sets[pid] || []).filter(e => e.key === 'open').map(e => e.v)].map(Number).filter(Number.isFinite)));
+      if (!(open > 0)) continue;
+      const b = P.box, piv = [b.x + b.w * 0.06, b.y + b.h * 0.32], len = b.w * 0.94, arms = [];
+      for (let deg = 0; deg <= 76 * open + 0.01; deg += 4) { const r = -Math.min(deg, 76 * open) * Math.PI / 180; arms.push([piv, [piv[0] + len * Math.cos(r), piv[1] + len * Math.sin(r)]]); }
+      const top = Math.min(...arms.map(([, q]) => q[1]));
+      if (top < 0) warn.push(`gate "${pid}" swings off the top of the sheet when it opens (move it down ${Math.ceil(-top)}px)`);
+      const swingHits = (r, pad = 0) => arms.some(([p0, q]) => segHitsBox(p0, q, inset(r, pad)));
+      for (const [nm, r, owner] of rects) if (owner !== pid && swingHits(r, 1)) { warn.push(`gate "${pid}" swings into ${nm} when it opens (its arm rises ${Math.round(b.y - top)}px above the part)`); }
+      for (const [nm, r, owner] of texts) if (owner !== pid && !rects.some(x => x[0] === nm) && swingHits(r, 1)) warn.push(`gate "${pid}" swings into ${nm} when it opens`);
+      for (const [zid, z] of zones) {
+        const inside = q => q[0] > z.x && q[0] < z.x + z.w && q[1] > z.y && q[1] < z.y + z.h;
+        if (arms.some(([p0, q]) => inside(p0) !== inside(q))) warn.push(`gate "${pid}" swings across the border of zone "${zid}" when it opens`);
+      }
+    }
+    // ✓/✕ badges sit off a top corner of their part (BP.badgeAt): clear of the part's own leader, and
+    // of everything else.
+    for (const pid of [...new Set(tl.marks.map(m => m.id))]) {
+      const P = L.parts[pid], at = BP.badgeAt(P), badge = box(at.x - 9, at.y - 9, 18, 18), ld = BP.leaderOf(P);
+      if (ld) {
+        const [x0, y0, cx, cy, x1, y1] = ld.d.match(/-?\d+(?:\.\d+)?/g).map(Number), pts = [];
+        for (let k = 0; k <= 8; k++) { const t = k / 8, u = 1 - t; pts.push([u * u * x0 + 2 * u * t * cx + t * t * x1, u * u * y0 + 2 * u * t * cy + t * t * y1]); }
+        const nb = rects.find(x => x[2] === pid && x[0].startsWith('numeral'));
+        if (pts.some((q, k) => k && segHitsBox(pts[k - 1], q, badge)) || (nb && hit(nb[1], badge, 1))) warn.push(`the ✓/✕ badge on "${pid}" lands on its numeral ${ld.text} (give the part another "lead")`);
+      }
+      for (const [nm, r, owner] of rects) if (owner !== pid && hit(badge, r, 1)) warn.push(`the ✓/✕ badge on "${pid}" overlaps ${nm}`);
+      // Text that is up while one of this part's badges is (zone titles and notes included).
+      const up = tl.marks.filter(m => m.id === pid).map(m => [m.a, m.b ?? Infinity]);
+      for (const [nm, r, owner, tw] of texts) if (owner !== pid && !rects.some(x => x[0] === nm) && up.some(w => meets(w, tw)) && hit(badge, r, 1)) warn.push(`the ✓/✕ badge on "${pid}" covers ${nm}`);
     }
     tl.steps.forEach((s, i) => { if (s.say.length > 120) warn.push(`step ${i + 1}: caption is ${s.say.length} chars; keep it under 120`); });
     const T = tl.total;

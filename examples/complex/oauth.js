@@ -52,7 +52,7 @@ BLUEPRINT.scene('oauth', {
         { on: 'pw', item: 'chip', text: 'PASSWORD', dur: 1.2, arrive: { set: { login: { open: 1 } }, ok: ['login'] } },
         { on: 'pw', back: true, item: 'chip', text: 'CODE 4/0AX', dur: 1.2 }
       ],
-      note: { at: [596, 300], text: 'CODE · VALID 10 MIN', anchor: 'end', dx: 0 }
+      note: { at: [532, 300], text: 'CODE · VALID 10 MIN', anchor: 'end', dx: 0 }
     },
     {
       say: 'The browser passes the code up, but a code alone opens nothing without the secret (5).',
@@ -87,7 +87,7 @@ BLUEPRINT.scene('oauth', {
       glow: ['pw'],
       note: [
         { at: [390, 344], text: 'YOUR PASSWORD TRAVELS ONLY HERE', anchor: 'middle', dx: 0 },
-        { at: [400, 256], text: 'APP GETS: CODE → TOKEN → PROFILE', anchor: 'start', dx: 0 }
+        { at: [400, 250], text: 'APP GETS:\nCODE → TOKEN → PROFILE', anchor: 'start', dx: 0 }
       ],
       hold: 2.6
     }
