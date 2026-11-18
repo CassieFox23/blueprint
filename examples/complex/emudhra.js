@@ -27,7 +27,7 @@ BLUEPRINT.scene('emudhra', {
     { id: 'shaft', from: 'phone.n', to: 'trust.s', heavy: true },
     { id: 'web', from: 'phone.e', to: 'bank.w', label: 'HTTPS' },
     { id: 'chain', from: 'root.e', to: 'inter.w', arrow: true, label: 'VOUCHES' },
-    { id: 'sign', from: 'inter.e', to: 'cert.w', arrow: true, label: 'SIGNS' },
+    { id: 'sign', from: 'inter.e', to: 'cert.w', arrow: true, label: 'SIGNS', labelPos: 0.3 },
     { id: 'tie', from: 'trust.e', to: 'root.w', kind: 'wire' },
     { id: 'mitm', from: 'phone.s', to: 'stranger.w' },
     { id: 'push', from: 'phone.e+30', to: 'makers.w', kind: 'wire' }
@@ -96,7 +96,7 @@ BLUEPRINT.scene('emudhra', {
     {
       say: 'No misuse has been confirmed. Keep your phone and browser updated so the block lists reach you.',
       note: [
-        { at: [520, 292], text: '17 OCT  KEYS REPORTED\n18 OCT  KEYS REVOKED\n20 OCT  BLOCKED IN FIREFOX\n22 OCT  EMUDHRA EXITS TLS', anchor: 'start' }
+        { at: [520, 292], text: '17 OCT  KEYS REPORTED\n17 OCT  BLOCKED IN FIREFOX\n18 OCT  KEYS REVOKED\n20 OCT  ROOT DISTRUSTED\n22 OCT  EMUDHRA EXITS TLS', anchor: 'start' }
       ],
       ok: ['phone'],
       hold: 3
