@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 // Build the product site: one page, every example live.
-//   node site/build.mjs [--repo owner/name]  ->  site/dist/index.html (+ site/dist/img)
+//   node site/build.mjs [--repo owner/name]
+//   -> site/dist/: index.html, og.png (when site/og.png exists), robots.txt, sitemap.xml,
+//      vercel.json (security headers) and package.json (the Vercel build step, see below)
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, copyFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
+import { scriptSafe, jsonScript, httpSources } from '../scripts/lib/inline.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '..');
 const require = createRequire(import.meta.url);
@@ -13,6 +17,7 @@ const BP = require(join(root, 'runtime/blueprint.js'));
 const argv = process.argv.slice(2);
 const REPO = argv.includes('--repo') ? argv[argv.indexOf('--repo') + 1] : 'intincrab/blueprint';
 const GH = `https://github.com/${REPO}`;
+const SITE = 'https://blueprint.intincrab.com/';
 const INSTALL = `npx skills add ${REPO}`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -48,10 +53,10 @@ for (const group of ['small', 'complex']) {
     const code = readFileSync(join(root, 'examples', group, f), 'utf8'), got = [];
     vm.runInNewContext(code, { BLUEPRINT: { scene: (id, spec) => got.push([id, spec]) } });
     const [id, spec] = got[0], L = BP.layout(spec), tl = BP.compile(spec, L);
-    const m = META[id] || [spec.title.toLowerCase(), ''];
+    const m = META[id] || [String(spec.title || id).toLowerCase(), ''];
     scenes.push({
-      id, group, file: `examples/${group}/${f}`, code, title: spec.title, steps: tl.steps.map(s => s.say), secs: Math.round(tl.total),
-      parts: L.order.length, lines: Object.keys(L.lines).length, paper: spec.paper || 'blue', sources: spec.sources || null,
+      id, group, file: `examples/${group}/${f}`, code, title: spec.title || id, steps: tl.steps.map(s => s.say), secs: Math.round(tl.total),
+      parts: L.order.length, lines: Object.keys(L.lines).length, paper: spec.paper || 'blue', sources: httpSources(spec.sources).length ? httpSources(spec.sources) : null,
       prompt: m[0], words: (m[1] + ' ' + spec.title).toLowerCase()
     });
   }
@@ -61,6 +66,8 @@ scenes.sort((a, b) => rank(a.id) - rank(b.id));
 const small = scenes.filter(s => s.group === 'small'), complex = scenes.filter(s => s.group === 'complex');
 const runtime = readFileSync(join(root, 'runtime/blueprint.js'), 'utf8');
 const meta = scenes.map(({ code, ...m }) => m);
+// The grid leads with the featured sheet; the viewer's previous/next follow the grid.
+const gridOrder = [...scenes].sort((a, b) => (b.id === 'emudhra') - (a.id === 'emudhra'));
 const sources = Object.fromEntries(scenes.map(s => [s.id, s.code]));
 const chips = [['a cache', 'cache'], ['the eMudhra breach', 'emudhra'], ['the event loop', 'event-loop'], ['Sign in with Google', 'oauth'], ['how an LLM writes', 'llm'], ['git merge', 'git-merge']];
 
@@ -357,6 +364,7 @@ h2{font-family:var(--serif);font-weight:400;font-size:clamp(40px,5.6vw,72px);lin
 .foot-row p{max-width:68ch}
 .foot-row a{color:#fff;text-decoration:none}
 .foot-row a:hover{text-decoration:underline;text-underline-offset:3px}
+.foot-row .privacy{font-size:13px}
 .vw-top h2{font-size:30px;line-height:1.05}
 @media (max-width:980px){.card.feature{grid-row:auto}.tb{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:560px){.card.feature{grid-column:auto}.tb{grid-template-columns:minmax(0,1fr)}.tb .w2{grid-column:auto}.tb-main{grid-template-columns:minmax(0,1fr)}.tb-copy{justify-self:start}.how{gap:20px}}
@@ -383,8 +391,8 @@ h2{font-family:var(--serif);font-weight:400;font-size:clamp(40px,5.6vw,72px);lin
     <div class="demo">
       <div class="pwrap">
         <form class="prompt" id="ask" autocomplete="off">
-          <label for="q">/blueprint</label>
-          <input id="q" name="q" type="text" value="how a cache works" placeholder="try: event loop, oauth, git…" role="combobox" aria-expanded="false" aria-controls="sug" aria-autocomplete="list" aria-label="Pick a topic from the examples">
+          <label for="q" id="q-label">/blueprint</label><span id="q-desc" hidden>Pick a topic from the examples</span>
+          <input id="q" name="q" type="text" value="how a cache works" placeholder="try: event loop, oauth, git…" role="combobox" aria-expanded="false" aria-controls="sug" aria-autocomplete="list" aria-labelledby="q-label" aria-describedby="q-desc">
           <button type="submit">Draw</button>
         </form>
         <ul class="sug" id="sug" role="listbox" hidden></ul>
@@ -417,7 +425,7 @@ h2{font-family:var(--serif);font-weight:400;font-size:clamp(40px,5.6vw,72px);lin
         <button type="button" data-f="all" aria-pressed="true">All <span>${scenes.length}</span></button><button type="button" data-f="small" aria-pressed="false">Small <span>${small.length}</span></button><button type="button" data-f="complex" aria-pressed="false">Complex <span>${complex.length}</span></button>
       </div></div>
     </div>
-    <div class="grid" id="grid">${[...scenes].sort((a, b) => (b.id === 'emudhra') - (a.id === 'emudhra')).map(card).join('')}</div>
+    <div class="grid" id="grid">${gridOrder.map(card).join('')}</div>
     <div class="none" id="none" role="status" hidden><p id="none-p"></p><div class="code"><pre><code id="none-cmd"></code></pre><button class="copy" type="button" id="none-copy">Copy</button></div></div>
   </section>
 
@@ -442,7 +450,7 @@ h2{font-family:var(--serif);font-weight:400;font-size:clamp(40px,5.6vw,72px);lin
   <p class="big" aria-hidden="true">/blueprint</p>
   <div class="foot-row">
     <p>The look comes from Victorian patent drawings, the plain words from Thing Explainer, the part-by-part builds from Bartosz Ciechanowski, and the idea of a scene skill from Kamran Ahmed’s /stick-scene.</p>
-    <p class="foot-links">Inked by <a href="https://x.com/arcticlangoor" target="_blank" rel="noopener">Ajay (@arcticlangoor) ↗</a><br><a href="${GH}" target="_blank" rel="noopener">github.com/${esc(REPO)} ↗</a></p>
+    <p class="foot-links">Inked by <a href="https://x.com/arcticlangoor" target="_blank" rel="noopener">Ajay (@arcticlangoor) ↗</a><br><a href="${GH}" target="_blank" rel="noopener">github.com/${esc(REPO)} ↗</a><br><span class="privacy">Visits are counted with Vercel Web Analytics: cookieless, no personal data.</span></p>
   </div>
 </div></footer>
 
@@ -460,13 +468,14 @@ h2{font-family:var(--serif);font-weight:400;font-size:clamp(40px,5.6vw,72px);lin
   </div>
 </dialog>
 
-<script>${runtime}</script>
-${scenes.map(s => `<script>${s.code}</script>`).join('\n')}
+<script>${scriptSafe(runtime)}</script>
+${scenes.map(s => `<script>${scriptSafe(s.code)}</script>`).join('\n')}
 <script>
 (function(){
-var META=${JSON.stringify(meta)};
-var SRC=${JSON.stringify(sources)};
-var GHB=${JSON.stringify(GH + '/blob/main/')};
+var META=${jsonScript(meta)};
+var SEQ=${jsonScript(gridOrder.map(s => s.id))};
+var SRC=${jsonScript(sources)};
+var GHB=${jsonScript(GH + '/blob/main/')};
 var byId={};META.forEach(function(m){byId[m.id]=m;});
 var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 var $=function(id){return document.getElementById(id);};
@@ -512,10 +521,10 @@ function ranked(text){var ws=terms(text);if(!ws.length)return [];
 function match(text){return ranked(text)[0]||null;}
 /* suggestions */
 var sug=$('sug'),qEl=$('q'),sel=-1,items=[];
-function closeSug(){sug.hidden=true;qEl.setAttribute('aria-expanded','false');sel=-1;}
+function closeSug(){sug.hidden=true;qEl.setAttribute('aria-expanded','false');qEl.removeAttribute('aria-activedescendant');sel=-1;}
 function pick(m){closeSug();$('miss').hidden=true;qEl.value=m.prompt.replace(/[“”]/g,'');showHero(m.id,true);}
 function drawSug(){
-  var text=qEl.value.trim();items=ranked(text).slice(0,5);sug.innerHTML='';sel=-1;
+  var text=qEl.value.trim();items=ranked(text).slice(0,5);sug.innerHTML='';sel=-1;qEl.removeAttribute('aria-activedescendant');
   if(!text){closeSug();return;}
   if(!items.length){var li=document.createElement('li');li.className='none';li.textContent='No finished sheet for that. Press Enter for the command to run in Claude Code.';sug.appendChild(li);}
   items.forEach(function(m,i){var li=document.createElement('li');li.setAttribute('role','option');li.id='sug-'+i;li.textContent=m.title;var sp=document.createElement('span');sp.textContent=m.steps.length+' steps';li.appendChild(sp);
@@ -580,11 +589,12 @@ function openV(id){
   var orig=vctl.onStep;vctl.onStep=function(si){orig.call(vctl,si);bs.forEach(function(b,i){if(i===si){b.setAttribute('aria-current','step');}else b.removeAttribute('aria-current');});};
   vctl.onStep(vctl.stepIndex());
   $('vw-gh').href=GHB+m.file;
-  var src=$('vw-src');if(m.sources){src.hidden=false;src.innerHTML='Sources: '+m.sources.map(function(s){return '<a href="'+s[1].replace(/"/g,'&quot;')+'" target="_blank" rel="noopener">'+s[0].replace(/</g,'&lt;')+'</a>';}).join(', ');}else src.hidden=true;
+  var src=$('vw-src'),links=(m.sources||[]).filter(function(s){return /^https?:\\/\\//i.test(s[1]);});src.textContent='';src.hidden=!links.length;
+  if(links.length){src.appendChild(document.createTextNode('Sources: '));links.forEach(function(s,i){if(i)src.appendChild(document.createTextNode(', '));var a=document.createElement('a');a.href=s[1];a.target='_blank';a.rel='noopener noreferrer';a.textContent=s[0];src.appendChild(a);});}
   if(heroCtl)heroCtl.pause();
   if(!dlg.open)dlg.showModal();
 }
-function near(d){var i=META.indexOf(cur);return META[(i+d+META.length)%META.length].id;}
+function near(d){var i=SEQ.indexOf(cur.id);return SEQ[(i+d+SEQ.length)%SEQ.length];}
 function go(id){history.replaceState('',document.title,'#'+id);openV(id);}
 dlg.addEventListener('close',function(){if(vctl){vctl.destroy();vctl=null;}if(byId[location.hash.slice(1)])history.replaceState('',document.title,location.pathname+location.search);if(heroCtl&&!reduce)heroCtl.play();});
 $('vw-x').addEventListener('click',function(){dlg.close();});
@@ -613,10 +623,33 @@ if (existsSync(join(here, 'og.png'))) copyFileSync(join(here, 'og.png'), join(he
 // deploy folder carries a one-line build step that copies the page into public/.
 writeFileSync(join(here, 'dist/package.json'), JSON.stringify({
   name: 'blueprint-site', private: true,
-  scripts: { build: "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});for(const f of fs.readdirSync('.'))if(!['public','package.json','.vercel','node_modules'].includes(f))fs.cpSync(f,'public/'+f,{recursive:true})\"" }
+  // vercel.json stays at the deploy root, where Vercel reads it; robots.txt and sitemap.xml are copied.
+  scripts: { build: "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});for(const f of fs.readdirSync('.'))if(!['public','package.json','vercel.json','.vercel','node_modules'].includes(f))fs.cpSync(f,'public/'+f,{recursive:true})\"" }
 }, null, 2) + '\n');
+writeFileSync(join(here, 'dist/robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${SITE}sitemap.xml\n`);
+writeFileSync(join(here, 'dist/sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${SITE}</loc><lastmod>${new Date().toISOString().slice(0, 10)}</lastmod></url>\n</urlset>\n`);
 // Title, meta, fonts and styles belong in <head>: WhatsApp's link preview reads only the head.
 const cut = body.indexOf('<div class="bar"');
 if (cut < 0) throw new Error('site/build.mjs: page start marker not found');
-writeFileSync(join(here, 'dist/index.html'), `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n${body.slice(0, cut).trim()}\n</head><body>\n${body.slice(cut)}\n</body></html>\n`);
+const page = `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n${body.slice(0, cut).trim()}\n</head><body>\n${body.slice(cut)}\n</body></html>\n`;
+writeFileSync(join(here, 'dist/index.html'), page);
+// Security headers. Every inline <script> is allowed by its hash, so nothing else inline can run;
+// styles stay 'unsafe-inline' because the runtime writes style attributes and a <style> element.
+// Loads: Google Fonts (css + font files), the favicon as a data: URL, and Vercel Web Analytics
+// from this origin (/_vercel/insights/script.js, which posts back to /_vercel/insights/*).
+const hashes = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => `'sha256-${createHash('sha256').update(m[1], 'utf8').digest('base64')}'`);
+const CSP = [
+  "default-src 'self'", `script-src 'self' ${hashes.join(' ')}`, "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src https://fonts.gstatic.com", "img-src 'self' data:", "connect-src 'self'", "object-src 'none'", "base-uri 'self'",
+  "form-action 'self'", "frame-ancestors 'none'"
+].join('; ');
+writeFileSync(join(here, 'dist/vercel.json'), JSON.stringify({
+  headers: [{ source: '/(.*)', headers: [
+    { key: 'Content-Security-Policy', value: CSP },
+    { key: 'X-Content-Type-Options', value: 'nosniff' },
+    { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+    { key: 'X-Frame-Options', value: 'DENY' }
+  ] }]
+}, null, 2) + '\n');
 console.log(`site: ${scenes.length} scenes (${small.length} small, ${complex.length} complex), repo ${REPO} -> site/dist/index.html (${(body.length / 1024).toFixed(0)} KB)`);
