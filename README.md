@@ -30,7 +30,15 @@ Or clone it into your skills folder:
 git clone https://github.com/intincrab/blueprint.git ~/.claude/skills/blueprint
 ```
 
-It needs Node. [Playwright](https://playwright.dev) is optional, and lets Claude render frames of a sheet to check its own work.
+It needs Node 18 or later. [Playwright](https://playwright.dev) is optional: it lets Claude render frames of a sheet to check its own work, and it is what the GIF, MP4 and PNG exports run on. To set it up, run this once in the skill folder:
+
+```bash
+cd ~/.claude/skills/blueprint     # or wherever the skill was installed
+npm i                             # installs playwright@1.56.1 from package.json
+npx playwright install chromium   # downloads the browser it drives
+```
+
+Linting (`scripts/check.mjs`) and building a page (`scripts/build.mjs`) need nothing but Node.
 
 ## Use
 
@@ -111,9 +119,14 @@ node scripts/export.mjs examples/small/cache.js --format gif            # loops 
 node scripts/export.mjs examples/small/cache.js --format mp4            # for X or a talk; add --audio track.mp3
 node scripts/export.mjs examples/small/cache.js --format png            # the finished sheet at 2x
 node scripts/export.mjs examples/small/cache.js --format png --steps    # one image per step, for slides
+node scripts/export.mjs examples/small/cache.js --format all --out out/cache.png   # out/cache.png, .gif, .mp4
 ```
 
-Or just ask: `/blueprint how a cache works, as a gif`. Exporting needs [Playwright](https://playwright.dev). MP4 also needs ffmpeg, except on macOS, where the built-in video encoder is used.
+Or just ask: `/blueprint how a cache works, as a gif`. Exporting needs Playwright (see [Install](#install)). `--out` ending in `.png`, `.gif` or `.mp4` names the files (each format keeps its own extension, and `--steps` adds `-01`, `-02`…); any other `--out` is a folder. A file with several scenes exports the first; pick another with `--scene <id>`.
+
+MP4 also needs an encoder. With [ffmpeg](https://ffmpeg.org) on your PATH it uses that. Without it, on macOS it runs `video/encode.swift` through `swift`, which comes with the Xcode command-line tools (`xcode-select --install`); on Linux and Windows, install ffmpeg. With `--audio`, the video sets the length: a shorter track ends in silence, a longer one is cut.
+
+A scene's `sources` (the links behind an incident sheet) are not drawn into GIFs, videos or images. Put them in the post, the slide notes or the README next to the export. `scripts/build.mjs` lists them under the sheet.
 
 ## Incidents and postmortems
 
@@ -125,7 +138,10 @@ To send a sheet to someone as a single file:
 
 ```bash
 node scripts/build.mjs examples/small/cache.js --out cache.html
+node scripts/build.mjs a.js b.js --out explainers.html --title "How our API works" --play view --paper linen
 ```
+
+The page inlines the runtime and every scene, and lists each scene's `sources` as links under it.
 
 ## What is in the repo
 
@@ -136,12 +152,16 @@ node scripts/build.mjs examples/small/cache.js --out cache.html
 | `runtime/blueprint.js` | Layout, timeline, SVG renderer and the `<blueprint-scene>` element |
 | `templates/scene.js` | A starting scene |
 | `templates/incident.js` | A starting scene for incidents and postmortems |
-| `scripts/check.mjs` | Lints a scene: unknown ids, overlapping parts, lines through parts, labels off the sheet |
+| `scripts/check.mjs` | Lints a scene: unknown ids, empty scenes, parts no step draws, overlapping parts, lines through parts or text, labels off the sheet |
 | `scripts/frames.mjs` | Renders chosen moments into one contact sheet (needs Playwright) |
 | `scripts/build.mjs` | Turns scenes into one standalone HTML page |
 | `scripts/export.mjs` | Exports a scene to GIF, MP4 or PNG |
+| `scripts/lib/` | The GIF encoder, the PNG decoder and the helpers for inlining code into a page |
+| `package.json` | npm scripts (`npm run check -- scene.js`, `build`, `frames`, `export`) and the pinned Playwright |
 | `examples/` | 10 small and 11 complex scenes |
-| `site/` | The website, built with `node site/build.mjs` |
+| `assets/` | The logo and the README's GIF and stills |
+| `gallery/` | Every example on one self-contained page, built with `node gallery/build.mjs` |
+| `site/` | The website, built with `node site/build.mjs` into `site/dist` (page, share card, robots.txt, sitemap.xml, vercel.json headers) |
 | `video/` | The teaser film and the scripts that render it and the README preview |
 
 ## Where the look comes from

@@ -11,6 +11,10 @@ BLUEPRINT.scene('cache', {
   sheet: 'SHEET 1 OF 1',         // top right (optional)
   paper: 'blue',                 // 'blue' (default) or 'linen'
   size: [640, 320],              // drawing area in units; small scenes 640×320, complex 800×400
+  sources: [                     // optional: where the facts come from (incidents, news)
+    ['Postmortem', 'https://example.com/postmortem'],
+    ['Status page', 'https://example.com/status']
+  ],
   parts: [ … ],
   lines: [ … ],
   steps: [ … ]
@@ -20,6 +24,8 @@ BLUEPRINT.scene('cache', {
 The sheet adds a border, a header and a caption band around the drawing area, so you only lay out inside `size`. (0, 0) is the top left of the drawing area. Keep parts at least 24 units from the edges so labels and numerals fit.
 
 Ids: letters, digits, `_` and `-`. Parts and lines share one namespace.
+
+`sources` is a list of `[name, url]` pairs. The sheet itself never shows them: `scripts/build.mjs` lists them as links under the scene, and so does the site's viewer. Only `http://` and `https://` links are kept. GIF, MP4 and PNG exports leave them out, so hand the links over with the file.
 
 ## 2. Parts
 
@@ -188,6 +194,8 @@ A step lasts: draws (0.85 s each, staggered 0.16 s) + runs + `then` (0.9 s) + `h
 | `mp4` | H.264 video, 30 fps, 1.25× speed, optional `--audio` | X, LinkedIn, talks |
 | `png` | the finished sheet at 2× | thumbnails, docs, social cards |
 | `png --steps` | one PNG per step's end | slide decks |
+
+`--out` ending in `.png`, `.gif` or `.mp4` sets the file name (each format keeps its own extension; `--steps` adds `-01`, `-02`…). Any other `--out` is a folder. `--scene <id>` picks a scene from a file with several. Exports do not include `sources`.
 
 A good GIF stays under about 5 MB: lower `--width` or `--fps`, or raise `--speed`, if it grows past that.
 

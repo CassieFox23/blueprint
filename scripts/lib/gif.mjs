@@ -53,9 +53,14 @@ export class GifWriter {
     const pal = new Uint8Array(768); pal.set(this.palette); out.push(...pal);
     out.push(0x21, 0xff, 11, ...Buffer.from('NETSCAPE2.0', 'latin1'), 3, 1); u16(loop); out.push(0);
     const chunks = [Buffer.from(out)];
+    // Delays are whole hundredths of a second. Rounding each frame on its own drifts (1/15 s is
+    // 6.67 cs: 7 runs 5% slow; 1/30 s is 3.33 cs: 3 runs 10% fast), so carry each frame's rounding
+    // error into the next and the running total stays within half a hundredth of the true time.
+    let carry = 0;
     for (const f of this.frames) {
       const hd = [0x21, 0xf9, 4, 0x04, 0, 0, 0, 0];                         // disposal: leave in place
-      const cs = Math.max(2, Math.round(f.delay * 100)); hd[4] = cs & 255; hd[5] = (cs >> 8) & 255;
+      const want = f.delay * 100 + carry, cs = Math.min(65535, Math.max(2, Math.round(want)));
+      carry = want - cs; hd[4] = cs & 255; hd[5] = (cs >> 8) & 255;
       hd.push(0x2c, f.x & 255, f.x >> 8, f.y & 255, f.y >> 8, f.w & 255, f.w >> 8, f.h & 255, f.h >> 8, 0, 8);
       chunks.push(Buffer.from(hd));
       for (let i = 0; i < f.data.length; i += 255) {

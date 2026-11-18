@@ -1,0 +1,21 @@
+{
+  "name": "blueprint",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude Code skill: animated explainers drawn like patent sheets.",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "build": "node scripts/build.mjs",
+    "frames": "node scripts/frames.mjs",
+    "export": "node scripts/export.mjs",
+    "site": "node site/build.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

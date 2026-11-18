@@ -1,5 +1,7 @@
-// Encode a folder of JPEG frames plus an audio file into an H.264/AAC MP4 with AVFoundation (no ffmpeg).
-//   swift video/encode.swift <framesDir> <audio.m4a> <out.mp4> [fps]
+// Encode a folder of PNG or JPEG frames (f00000.png, f00001.png … in name order), plus an optional
+// audio file, into an H.264 (and AAC) MP4 with AVFoundation, no ffmpeg. Pass "-" for no audio.
+// Audio longer than the video is cut; the video sets the length. Needs the Xcode command-line tools.
+//   swift video/encode.swift <framesDir> <audio.m4a|-> <out.mp4> [fps (60)] [bitrate (18000000)]
 import AVFoundation
 import CoreGraphics
 import ImageIO

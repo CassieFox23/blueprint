@@ -8,16 +8,21 @@
 //
 // Frames: "sN:end" = end of step N, "sN:0.5" = halfway through step N,
 // "t:4.2" = 4.2 s in, "end" = the finished drawing. Default: the middle and
-// end of every step.
-import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+// end of every step. A file with several scenes renders the first; pick another with --scene <id>.
+// Exit code 1 when the scene has errors or the page throws.
+import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
+import { jsonScript } from './lib/inline.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = Object.fromEntries(process.argv.slice(2).reduce((a, v, i, all) => (v.startsWith('--') ? a.concat([[v.slice(2), all[i + 1] && !all[i + 1].startsWith('--') ? all[i + 1] : true]]) : a), []));
-if (!args.src) { console.error('usage: frames.mjs --src scene.js [--out sheet.png] [--frames "s1:end,s2:0.5,end"] [--paper blue|linen] [--cols 2] [--width 520]'); process.exit(2); }
+const USAGE = 'usage: frames.mjs --src scene.js [--out sheet.png] [--scene id] [--frames "s1:end,s2:0.5,end"] [--paper blue|linen] [--cols 2] [--width 520]';
+for (const k of ['src', 'out', 'scene', 'frames', 'paper', 'cols', 'width']) if (args[k] === true) { console.error(`--${k} needs a value\n${USAGE}`); process.exit(2); }
+for (const k of Object.keys(args)) if (!['src', 'out', 'scene', 'frames', 'paper', 'cols', 'width'].includes(k)) { console.error(`unknown option --${k}\n${USAGE}`); process.exit(2); }
+if (!args.src) { console.error(USAGE); process.exit(2); }
 
 const require = createRequire(import.meta.url);
 let playwright;
@@ -36,10 +41,13 @@ body{margin:0;padding:16px;background:#d9dde3;font:12px ui-monospace,Menlo,monos
 <script src="${pathToFileURL(runtime)}"></script><script src="${pathToFileURL(src)}"></script>
 <script>
 window.__errors=[];window.addEventListener('error',e=>__errors.push(String(e.message)));
-const ids=Object.keys(BLUEPRINT.scenes);const spec=BLUEPRINT.scenes[ids[ids.length-1]];
+const ids=Object.keys(BLUEPRINT.scenes),want_id=${jsonScript(args.scene || '')};
+if(!ids.length)throw new Error('the file defines no scene');
+if(want_id&&!BLUEPRINT.scenes[want_id])throw new Error('no scene "'+want_id+'" in the file (it has: '+ids.join(', ')+')');
+const id=want_id||ids[0],spec=BLUEPRINT.scenes[id];
 const L=BLUEPRINT.layout(spec);const tl=BLUEPRINT.compile(spec,L);
-window.__report={errors:L.errors,warnings:L.warnings,steps:tl.steps.length,total:tl.total};
-const want=${JSON.stringify(args.frames || '')}||tl.steps.map((s,i)=>'s'+(i+1)+':0.5,s'+(i+1)+':end').join(',');
+window.__report={id:id,ids:ids,errors:L.errors,warnings:L.warnings,steps:tl.steps.length,total:tl.total};
+const want=${jsonScript(args.frames || '')}||tl.steps.map((s,i)=>'s'+(i+1)+':0.5,s'+(i+1)+':end').join(',');
 const g=document.getElementById('g');
 want.split(',').map(x=>x.trim()).filter(Boolean).forEach(f=>{
   let t,lab=f;
@@ -49,26 +57,32 @@ want.split(',').map(x=>x.trim()).filter(Boolean).forEach(f=>{
     t=m[2]==='end'?s.b-0.05:s.a+(s.b-s.a)*(+m[2]);lab=f+'  '+s.say;}
   const d=document.createElement('div');d.className='f';d.innerHTML='<b>'+lab.replace(/</g,'&lt;')+'  (t='+t.toFixed(2)+')</b>';
   const h=document.createElement('div');d.appendChild(h);g.appendChild(d);
-  const c=BLUEPRINT.mount(h,spec,{play:'still',controls:false,font:false,paper:${JSON.stringify(args.paper || '')}||undefined});
+  const c=BLUEPRINT.mount(h,spec,{play:'still',controls:false,font:false,paper:${jsonScript(args.paper || '')}||undefined});
   c.seek(t);
 });
 </script>`;
 
 const dir = mkdtempSync(join(tmpdir(), 'bp-frames-'));
-const file = join(dir, 'sheet.html');
-writeFileSync(file, page);
-const browser = await playwright.chromium.launch();
-const pg = await browser.newPage({ viewport: { width: cols * (width + 14) + 32, height: 800 }, deviceScaleFactor: 1 });
-const consoleErrors = [];
-pg.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') consoleErrors.push(m.text()); });
-pg.on('pageerror', e => consoleErrors.push(String(e)));
-await pg.goto(pathToFileURL(file).href);
-await pg.waitForTimeout(300);
-const report = await pg.evaluate(() => ({ ...window.__report, runtime: window.__errors }));
-await pg.screenshot({ path: out, fullPage: true });
-await browser.close();
+let report = {}, pageErrors = [], consoleErrors = [];
+try {
+  const file = join(dir, 'sheet.html');
+  writeFileSync(file, page);
+  const browser = await playwright.chromium.launch();
+  try {
+    const pg = await browser.newPage({ viewport: { width: cols * (width + 14) + 32, height: 800 }, deviceScaleFactor: 1 });
+    pg.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') consoleErrors.push(m.text()); });
+    pg.on('pageerror', e => pageErrors.push(String(e)));
+    await pg.goto(pathToFileURL(file).href);
+    await pg.waitForTimeout(300);
+    report = await pg.evaluate(() => ({ ...window.__report, runtime: window.__errors }));
+    await pg.screenshot({ path: out, fullPage: true });
+  } finally { await browser.close(); }
+} finally { rmSync(dir, { recursive: true, force: true }); }
 console.log(`sheet: ${out}`);
-console.log(`steps: ${report.steps}, length: ${report.total?.toFixed(1)} s`);
-for (const e of [...(report.errors || []), ...(report.runtime || []), ...consoleErrors]) console.log('ERROR ' + e);
+if (report.ids && report.ids.length > 1 && !args.scene) console.log(`note  the file has ${report.ids.length} scenes (${report.ids.join(', ')}); rendered "${report.id}". Pick one with --scene <id>.`);
+if (report.steps != null) console.log(`steps: ${report.steps}, length: ${report.total.toFixed(1)} s`);
+// The page's own error listener and Playwright's pageerror can both see one throw.
+const runtimeErrors = [...new Set([...(report.runtime || []), ...pageErrors].map(e => e.replace(/^Uncaught /, '')))];
+for (const e of [...(report.errors || []), ...runtimeErrors, ...consoleErrors]) console.log('ERROR ' + e);
 for (const w of report.warnings || []) console.log('warn  ' + w);
-process.exit((report.errors || []).length || (report.runtime || []).length ? 1 : 0);
+process.exit((report.errors || []).length || runtimeErrors.length ? 1 : 0);

@@ -9,6 +9,7 @@ import { resolve, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
+import { scriptSafe } from '../scripts/lib/inline.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '..');
 const require = createRequire(import.meta.url);
@@ -126,8 +127,8 @@ node scripts/build.mjs scene.js --out scene.html</pre>
 
   <footer>Each sheet plays once when it scrolls into view and then holds the finished drawing. Click a sheet to pause, use the arrows to step through, or the bar of dots to jump to a step. With reduced motion turned on you see the finished sheets.</footer>
 </div>
-<script>${runtime}</script>
-${[...small, ...complex].map(s => `<script>${s.code}</script>`).join('\n')}
+<script>${scriptSafe(runtime)}</script>
+${[...small, ...complex].map(s => `<script>${scriptSafe(s.code)}</script>`).join('\n')}
 `;
 
 writeFileSync(join(here, 'index.html'), `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n</head><body>\n${body}\n</body></html>\n`);

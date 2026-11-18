@@ -15,28 +15,29 @@ The drawing is done by `runtime/blueprint.js`. You never draw SVG: you write a s
 - `references/craft.md`: the scene format, every part kind with its sizes and states, line kinds, step actions, the metaphor catalogue and the mistakes already made once. **Read it before writing a scene.**
 - `templates/scene.js`: the starting point.
 - `templates/incident.js`: the starting point for an incident or postmortem sheet (see **Incident sheets**).
-- `scripts/check.mjs`: lints a scene without a browser (unknown ids, overlaps, lines through parts, labels off the sheet, long captions).
+- `scripts/check.mjs`: lints a scene without a browser (unknown ids, empty scenes, parts no step draws, overlaps, lines through parts or text, labels off the sheet, long captions).
 - `scripts/frames.mjs`: renders the scene frozen at chosen moments into one contact-sheet PNG and reports runtime errors.
 - `scripts/build.mjs`: turns scene files into a standalone HTML page with the runtime inlined.
 - `scripts/export.mjs`: renders a scene to GIF, MP4 or PNG for places that cannot run JavaScript.
-- `examples/small/` (10 scenes, 3–6 steps) and `examples/complex/` (10 scenes, 7–10 steps, camera moves). `examples/small/cache.js` is the cleanest small one, `examples/complex/url.js` the cleanest complex one.
+- `examples/small/` (10 scenes, 3–6 steps) and `examples/complex/` (11 scenes, 7–10 steps, camera moves). `examples/small/cache.js` is the cleanest small one, `examples/complex/url.js` the cleanest complex one.
 
 ## Workflow
 
 1. **Find the mechanism.** In one line: what goes in, what comes out, and what the reader should understand at the end. Then write the "but… so…" chain: the simplest version first, the problem it has, the part that fixes it, the next problem, and so on. Each link becomes a step. If you cannot write the chain, the topic is too broad: pick one mechanism inside it.
 2. **Pick the parts** from the kit, using the metaphor catalogue in craft.md (a cache is a drawer, a queue is a rack of slots, auth is a lock and key, a rate limit is a tank). Pitch two or three framings in one line each and let the user choose, unless they said to just go.
 3. **Lay out the sheet on paper first.** Flow runs left to right, layers top to bottom. Fix every part's centre (`at`) on a 20 px grid with at least 40 px between parts, then the lines, then the steps. Start from `templates/scene.js`.
-4. **Lint it** until it prints `clean`:
+4. **Lint it** until it prints `clean` (it also flags a line running through a label, numeral or note, and parts or lines that no step draws):
    ```sh
    node <skill-dir>/scripts/check.mjs path/to/scene.js
    ```
    `<skill-dir>` is the folder this SKILL.md is in. Fix every warning unless the overlap is deliberate.
 5. **Look at it.** Render a contact sheet and Read the PNG:
    ```sh
-   # once, in a scratch dir:  npm i playwright@1.56.1 && npx playwright install chromium
-   NODE_PATH=<scratch>/node_modules node <skill-dir>/scripts/frames.mjs --src path/to/scene.js --out /tmp/scene.png
+   # once, in <skill-dir>:  npm i && npx playwright install chromium
+   # (or in a scratch dir: npm i playwright@1.56.1 && npx playwright install chromium, and prefix NODE_PATH=<scratch>/node_modules)
+   node <skill-dir>/scripts/frames.mjs --src path/to/scene.js --out /tmp/scene.png
    ```
-   The default sheet shows the middle and the end of every step. Pick other moments with `--frames "s2:0.4,s3:end,end"`. Check that nothing is cropped, no text sits on a line or a part, every token is visible where it should be, the camera frames what the caption talks about, and the last frame explains the whole idea on its own. Two or three rounds is normal.
+   It exits 1 if the scene has errors or the page throws. The default sheet shows the middle and the end of every step. Pick other moments with `--frames "s2:0.4,s3:end,end"`. Check that nothing is cropped, no text sits on a line or a part, every token is visible where it should be, the camera frames what the caption talks about, and the last frame explains the whole idea on its own. Two or three rounds is normal.
 6. **Ship it.** Either embed it:
    ```html
    <blueprint-scene scene="cache" play="view" key></blueprint-scene>
@@ -47,12 +48,12 @@ The drawing is done by `runtime/blueprint.js`. You never draw SVG: you write a s
 
    When the user asks for a GIF, video, image or slides, or the sheet is going somewhere that cannot run JavaScript (a GitHub README, Slack, X, Notion, a deck), export it:
    ```sh
-   NODE_PATH=<scratch>/node_modules node <skill-dir>/scripts/export.mjs scene.js --format gif     # README, Slack
-   NODE_PATH=<scratch>/node_modules node <skill-dir>/scripts/export.mjs scene.js --format mp4     # X, LinkedIn, talks
-   NODE_PATH=<scratch>/node_modules node <skill-dir>/scripts/export.mjs scene.js --format png     # the finished sheet, 2x
-   NODE_PATH=<scratch>/node_modules node <skill-dir>/scripts/export.mjs scene.js --format png --steps   # one PNG per step, for slides
+   node <skill-dir>/scripts/export.mjs scene.js --format gif     # README, Slack
+   node <skill-dir>/scripts/export.mjs scene.js --format mp4     # X, LinkedIn, talks
+   node <skill-dir>/scripts/export.mjs scene.js --format png     # the finished sheet, 2x
+   node <skill-dir>/scripts/export.mjs scene.js --format png --steps   # one PNG per step, for slides
    ```
-   `--format all` writes all three. Useful options: `--out`, `--width` (default 1280), `--speed` (GIF 1.8×, MP4 1.25×), `--fps`, `--paper`, `--audio track.mp3` (MP4 only). GIF and PNG need only Playwright. MP4 uses ffmpeg when it is installed, AVFoundation on macOS otherwise. Read one exported frame or the PNG back before handing it over.
+   `--format all` writes all three. Useful options: `--out` (a name ending in `.png`/`.gif`/`.mp4` sets the file name and each format keeps its own extension; anything else is a folder), `--scene <id>` (for a file with several scenes), `--width` (default 1280), `--speed` (GIF 1.8×, MP4 1.25×), `--fps`, `--paper`, `--audio track.mp3` (MP4 only; the video sets the length). GIF and PNG need only Playwright. MP4 uses ffmpeg when it is on PATH; otherwise, on macOS, `video/encode.swift` through `swift` (the Xcode command-line tools: `xcode-select --install`); elsewhere install ffmpeg. Exports do not carry the scene's `sources`: give the user the links to post with it. Read one exported frame or the PNG back before handing it over.
 
 ## The element
 
@@ -69,7 +70,7 @@ The drawing is done by `runtime/blueprint.js`. You never draw SVG: you write a s
 
 When the topic is an outage, a breach or a postmortem, start from `templates/incident.js` and keep its story shape: a normal day, the change or trigger, what broke (with a number), how it was noticed, what stopped the damage, recovery, the root cause in plain words, the fix that prevents it (the "So…" step), and a timeline in the last step's note.
 
-- **Facts only.** Every time, number and claim comes from the user's postmortem, status page or tickets, or from published coverage for a public incident. Put the links in the scene's `sources`. If a fact is missing, ask for it or leave it out; never invent one.
+- **Facts only.** Every time, number and claim comes from the user's postmortem, status page or tickets, or from published coverage for a public incident. Put the links in the scene's `sources` (`[['Postmortem', 'https://…'], …]`, http(s) only); the site and `build.mjs` pages list them under the sheet, but GIF, MP4 and PNG exports do not, so pass them on with the export. If a fact is missing, ask for it or leave it out; never invent one.
 - **Blameless.** Name systems and changes, never people ("a config change", not "Ravi's change").
 - **One clock.** All times in one time zone, said once in the timeline.
 - **The fix earns its part.** The prevention is a new part drawn in with "So…", like any other part.
