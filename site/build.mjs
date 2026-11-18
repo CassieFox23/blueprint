@@ -614,5 +614,8 @@ writeFileSync(join(here, 'dist/package.json'), JSON.stringify({
   name: 'blueprint-site', private: true,
   scripts: { build: "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});for(const f of fs.readdirSync('.'))if(!['public','package.json','.vercel','node_modules'].includes(f))fs.cpSync(f,'public/'+f,{recursive:true})\"" }
 }, null, 2) + '\n');
-writeFileSync(join(here, 'dist/index.html'), `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n</head><body>\n${body}\n</body></html>\n`);
+// Title, meta, fonts and styles belong in <head>: WhatsApp's link preview reads only the head.
+const cut = body.indexOf('<div class="bar"');
+if (cut < 0) throw new Error('site/build.mjs: page start marker not found');
+writeFileSync(join(here, 'dist/index.html'), `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n${body.slice(0, cut).trim()}\n</head><body>\n${body.slice(cut)}\n</body></html>\n`);
 console.log(`site: ${scenes.length} scenes (${small.length} small, ${complex.length} complex), repo ${REPO} -> site/dist/index.html (${(body.length / 1024).toFixed(0)} KB)`);
