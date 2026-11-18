@@ -236,6 +236,7 @@ footer{margin-top:clamp(72px,10vw,120px);border-top:1px solid var(--line);paddin
 footer p{max-width:70ch}
 footer a{color:var(--fg);text-decoration:none}
 footer a:hover{text-decoration:underline;text-underline-offset:3px}
+.foot-links{line-height:1.9}
 
 dialog{border:0;padding:0;width:min(1200px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);border-radius:18px;background:var(--bg);color:var(--fg);box-shadow:0 30px 90px rgba(0,0,0,.4);overflow:hidden}
 dialog::backdrop{background:rgba(6,9,14,.6)}
@@ -441,7 +442,7 @@ h2{font-family:var(--serif);font-weight:400;font-size:clamp(40px,5.6vw,72px);lin
   <p class="big" aria-hidden="true">/blueprint</p>
   <div class="foot-row">
     <p>The look comes from Victorian patent drawings, the plain words from Thing Explainer, the part-by-part builds from Bartosz Ciechanowski, and the idea of a scene skill from Kamran Ahmed’s /stick-scene.</p>
-    <a href="${GH}" target="_blank" rel="noopener">github.com/${esc(REPO)} ↗</a>
+    <p class="foot-links">Inked by <a href="https://x.com/articlangoor" target="_blank" rel="noopener">Ajay (@articlangoor) ↗</a><br><a href="${GH}" target="_blank" rel="noopener">github.com/${esc(REPO)} ↗</a></p>
   </div>
 </div></footer>
 
