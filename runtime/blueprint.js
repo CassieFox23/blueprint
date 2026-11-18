@@ -181,7 +181,8 @@
       upd: function (k, w, h, S) { k.rot.setAttribute('transform', 'rotate(' + r2(90 * (1 - S.get('open', 1))) + ')'); }
     },
     gate: {
-      size: [76, 44], labelAt: 's', state: ['open'],
+      // inkBox: the post, the only part of the drawing that never moves; numbered leaders end on it.
+      size: [76, 44], labelAt: 's', state: ['open'], inkBox: [0, 0.2, 0.12, 1],
       draw: function (w, h) {
         var px = w * 0.06, py = h * 0.32, o = pf(rect(0, h * 0.2, w * 0.12, h * 0.8)) + ln(rect(0, h * 0.2, w * 0.12, h * 0.8)) + sh(shadeRect(0, h * 0.2, w * 0.12, h * 0.8));
         var arm = 'M' + r2(px) + ' ' + r2(py - 3) + ' H' + w + ' V' + r2(py + 3) + ' H' + r2(px) + ' Z';
@@ -427,13 +428,22 @@
     var v, len = p.leadLen || 22, end;
     if (Array.isArray(p.lead)) { end = [b.cx + p.lead[0], b.cy + p.lead[1]]; var m = Math.hypot(p.lead[0], p.lead[1]) || 1; v = [p.lead[0] / m, p.lead[1] / m]; }
     else { v = LEAD[p.lead || 'ne'] || LEAD.ne; }
-    var start = [b.cx + v[0] * b.w / 2 * 0.7, b.cy + v[1] * b.h / 2 * 0.7];
+    var start = [b.cx + v[0] * b.w / 2 * 0.7, b.cy + v[1] * b.h / 2 * 0.7], ink = P.kind && P.kind.inkBox;
+    // A part whose drawing fills only some of its box points its leader at the ink, not the gap.
+    if (ink) start = [clamp(start[0], b.x + ink[0] * b.w, b.x + ink[2] * b.w), clamp(start[1], b.y + ink[1] * b.h, b.y + ink[3] * b.h)];
     if (!end) { var dia = v[0] && v[1] ? 0.72 : 1; end = [b.cx + v[0] * (b.w / 2 + len * dia), b.cy + v[1] * (b.h / 2 + len * dia)]; }
     var mx = (start[0] + end[0]) / 2, my = (start[1] + end[1]) / 2, dx = end[0] - start[0], dy = end[1] - start[1], dl = Math.hypot(dx, dy) || 1;
     var ctrl = [mx - dy / dl * 5, my + dx / dl * 5];
     var anchor = v[0] > 0.3 ? 'start' : v[0] < -0.3 ? 'end' : 'middle';
     var tx = end[0] + v[0] * 4, ty = end[1] + (v[1] > 0.3 ? 11 : v[1] < -0.3 ? -3 : 4);
     return { d: 'M' + r2(start[0]) + ' ' + r2(start[1]) + ' Q' + r2(ctrl[0]) + ' ' + r2(ctrl[1]) + ' ' + r2(end[0]) + ' ' + r2(end[1]), tx: tx, ty: ty, anchor: anchor, text: String(p.n) };
+  }
+
+  // Where a part's ✓/✕ badge sits: off its top-right corner, or its top-left when the part's
+  // numbered leader already goes up and to the right (the default "ne").
+  function badgeAt(P) {
+    var b = P.box, ld = leaderOf(P), m = ld && ld.d.match(/-?\d+(?:\.\d+)?/g), ex = m && +m[4], ey = m && +m[5];
+    return ld && ex > b.cx && ey < b.cy ? { x: b.x - 2, y: b.y - 2 } : { x: b.x + b.w + 2, y: b.y - 2 };
   }
 
   function labelGeom(P) {
@@ -849,7 +859,7 @@
       o += '<rect class="bp-glow" data-k="glow' + i + '" x="' + r2(b.x - 7) + '" y="' + r2(b.y - 7) + '" width="' + r2(b.w + 14) + '" height="' + r2(b.h + 14) + '" rx="7" opacity="0"/>';
     });
     tl.marks.forEach(function (m, i) {
-      var b = L.parts[m.id].box, x = b.x + b.w + 2, y = b.y - 2, c = m.kind === 'fail' ? 'var(--bp-fail)' : 'var(--bp-ok)';
+      var at = badgeAt(L.parts[m.id]), x = at.x, y = at.y, c = m.kind === 'fail' ? 'var(--bp-fail)' : 'var(--bp-ok)';
       o += '<g data-k="mark' + i + '" opacity="0" transform="translate(' + r2(x) + ' ' + r2(y) + ')"><circle r="8" style="fill:var(--bp-paper);stroke:' + c + ';stroke-width:1.8"/>' +
         (m.kind === 'fail' ? '<path d="M-3.4 -3.4 L3.4 3.4 M3.4 -3.4 L-3.4 3.4" style="fill:none;stroke:' + c + ';stroke-width:2;stroke-linecap:round"/>' : '<path d="M-3.8 0.2 L-1 3 L4 -3" style="fill:none;stroke:' + c + ';stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/>') + '</g>';
     });
@@ -1211,6 +1221,16 @@
     return spec;
   }
 
+  var MISSING_GRACE_MS = 1500;
+  function missingScene(el, id) {
+    var known = Object.keys(SCENES);
+    var msg = !id ? 'This <blueprint-scene> has no scene attribute.'
+      : 'No scene named "' + id + '" has been loaded' + (known.length ? ' (loaded: ' + known.join(', ') + ')' : '') +
+        '. Check the scene attribute, and load the scene\'s file after blueprint.js (both with defer, in that order).';
+    showError(el, new Error(msg), null, { paper: el.getAttribute('paper') || undefined });
+    if (root.console) root.console.error('[blueprint] ' + msg);
+  }
+
   if (HAS_DOM && root.customElements && !root.customElements.get('blueprint-scene')) {
     var BlueprintScene = class extends HTMLElement {
       connectedCallback() {
@@ -1218,16 +1238,26 @@
         var id = self.getAttribute('scene');
         var go = function () {
           if (self._c || !self.isConnected) return;
+          if (self._timer) { clearTimeout(self._timer); self._timer = null; }
+          Array.prototype.slice.call(self.children).forEach(function (c) { if (c.className === 'bp-err') self.removeChild(c); });
           self._c = mount(self, SCENES[id], {
             play: self.getAttribute('play') || 'loop', paper: self.getAttribute('paper') || undefined,
             controls: !self.hasAttribute('no-controls'), key: self.hasAttribute('key'), font: !self.hasAttribute('no-font'),
             speed: self.hasAttribute('speed') ? self.getAttribute('speed') : 1
           });
         };
-        if (SCENES[id]) go();
-        else { self._wait = function (e) { if (e.detail === id) { root.removeEventListener('blueprint:scene', self._wait); self._wait = null; go(); } }; root.addEventListener('blueprint:scene', self._wait); }
+        if (id && SCENES[id]) go();
+        else {
+          // Wait for the scene's file. A scene that has not arrived a moment after the page has
+          // loaded is reported in the element's place; if it turns up later it still draws.
+          self._wait = function (e) { if (e.detail === id) { root.removeEventListener('blueprint:scene', self._wait); self._wait = null; go(); } };
+          root.addEventListener('blueprint:scene', self._wait);
+          var later = function () { self._timer = setTimeout(function () { self._timer = null; if (!self._c && self.isConnected) missingScene(self, id); }, MISSING_GRACE_MS); };
+          if (document.readyState === 'complete') later(); else root.addEventListener('load', later, { once: true });
+        }
       }
       disconnectedCallback() {
+        if (this._timer) { clearTimeout(this._timer); this._timer = null; }
         if (this._wait) { root.removeEventListener('blueprint:scene', this._wait); this._wait = null; }
         if (this._c) { this._c.destroy(); this._c = null; }
       }
@@ -1237,6 +1267,6 @@
 
   return {
     version: VERSION, scene: scene, scenes: SCENES, mount: mount, themes: THEMES, kinds: KINDS,
-    layout: layout, compile: compile, port: port, labelGeom: labelGeom, leaderOf: leaderOf, polyAt: polyAt
+    layout: layout, compile: compile, port: port, labelGeom: labelGeom, leaderOf: leaderOf, badgeAt: badgeAt, polyAt: polyAt
   };
 });

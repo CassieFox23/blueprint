@@ -111,6 +111,8 @@ Watch any of them at **[blueprint.intincrab.com](https://blueprint.intincrab.com
 | `speed` | Playback rate, e.g. `1.25` |
 | `no-font` | Uses the reader's own monospace font instead of fetching IBM Plex Mono from Google Fonts |
 
+Load `blueprint.js` before the scene files; `defer` keeps that order. If a scene can't be found (a misspelled `scene`, or its file loaded before the runtime), the element says so in the sheet's place and in the console.
+
 Every sheet has play and pause, previous and next step, and a step bar. With reduced motion turned on it shows the finished sheet. The runtime is one file with no dependencies. By default it loads IBM Plex Mono from Google Fonts; add `no-font` (or pass `--no-font` to `build.mjs` and `export.mjs`) and the page makes no outside requests.
 
 ## Share it as a GIF, video or image
