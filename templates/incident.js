@@ -24,7 +24,7 @@ BLUEPRINT.scene('incident', {
     { id: 'change', kind: 'box', at: [110, 330], size: [104, 44], label: 'CHANGE', muted: true },
     { id: 'config', kind: 'book', at: [330, 330], size: [80, 52], lines: 4, max: 8, labelAt: 'e', label: 'CONFIG', n: 4, lead: 'se', name: 'Config', note: 'the settings the app servers start with' },
     { id: 'check', kind: 'sieve', at: [215, 270], size: [58, 32], labelAt: 'n', label: 'CHECK', n: 7, lead: 'ne', leadLen: 16, name: 'Config check', note: 'blocks values outside a safe range before deploy' },
-    { id: 'gauge', kind: 'gauge', at: [720, 90], size: [56, 56], value: 0.05, label: 'ERROR RATE', n: 5, lead: 'w', name: 'Error-rate alarm', note: 'pages on-call above 5% for 2 minutes' },
+    { id: 'gauge', kind: 'gauge', at: [720, 90], size: [56, 56], value: 0.05, labelAt: 'n', label: 'ERROR RATE', n: 5, lead: 'w', name: 'Error-rate alarm', note: 'pages on-call above 5% for 2 minutes' },
     { id: 'bell', kind: 'bell', at: [720, 230], size: [40, 42], label: 'PAGER', n: 6, lead: 'w', name: 'Pager', note: 'wakes the on-call engineer' }
   ],
   lines: [

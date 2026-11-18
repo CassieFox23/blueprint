@@ -32,7 +32,7 @@ BLUEPRINT.scene('transaction-log', {
       say: 'Asha sends Ravi ₹500 (1). The database (2) holds both balances (3) and (4).',
       draw: ['phone', 'req', 'db', 'w0', 'j', 'ja', 'jr', 'disk', 'asha', 'ravi'],
       run: [{ on: 'req', item: 'chip', text: '₹500', dur: 1.0, arrive: { glow: ['db'] } }],
-      note: { at: [610, 236], text: 'TOTAL ₹2,300', anchor: 'middle', dx: 0 }
+      note: { at: [600, 236], text: 'TOTAL ₹2,300', anchor: 'middle', dx: 0 }
     },
     {
       say: "It takes Asha's ₹500 first: her ₹2,000 becomes ₹1,500.",
@@ -62,7 +62,7 @@ BLUEPRINT.scene('transaction-log', {
         { on: 'jl', item: 'chip', text: 'RAVI +500', dur: 0.9, arrive: { set: { log: { lines: 2 } } } },
         { on: 'jl', item: 'chip', text: 'COMMIT', dur: 0.9, arrive: { set: { log: { lines: 3 } }, glow: ['log'] } }
       ],
-      note: { at: 'log.e', text: '3 LINES · ~1 MS' }
+      note: { at: 'log.n', text: '3 LINES · ~1 MS', dy: -8 }
     },
     {
       say: 'Only then does it change the balances, and once again the power fails halfway.',
@@ -95,7 +95,7 @@ BLUEPRINT.scene('transaction-log', {
       view: 'all',
       glow: ['log', 'jl'],
       note: [
-        { at: [610, 236], text: 'TOTAL ₹2,300 · NOTHING LOST', anchor: 'middle', dx: 0 },
+        { at: [600, 236], text: 'TOTAL ₹2,300 · NOTHING LOST', anchor: 'middle', dx: 0 },
         { at: 'phone.s', text: 'ASHA ₹1,500 · RAVI ₹800', dy: 20 }
       ],
       hold: 2.6
