@@ -442,7 +442,7 @@ h2{font-family:var(--serif);font-weight:400;font-size:clamp(40px,5.6vw,72px);lin
   <p class="big" aria-hidden="true">/blueprint</p>
   <div class="foot-row">
     <p>The look comes from Victorian patent drawings, the plain words from Thing Explainer, the part-by-part builds from Bartosz Ciechanowski, and the idea of a scene skill from Kamran Ahmed’s /stick-scene.</p>
-    <p class="foot-links">Inked by <a href="https://x.com/articlangoor" target="_blank" rel="noopener">Ajay (@articlangoor) ↗</a><br><a href="${GH}" target="_blank" rel="noopener">github.com/${esc(REPO)} ↗</a></p>
+    <p class="foot-links">Inked by <a href="https://x.com/arcticlangoor" target="_blank" rel="noopener">Ajay (@arcticlangoor) ↗</a><br><a href="${GH}" target="_blank" rel="noopener">github.com/${esc(REPO)} ↗</a></p>
   </div>
 </div></footer>
 
