@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Render a scene frozen at chosen moments into one contact sheet PNG, and
-// report runtime errors. Needs Playwright:  npm i playwright@1.56.1  (in a
-// scratch dir) and NODE_PATH pointing at its node_modules.
+// report runtime errors. Needs Playwright (npm i && npx playwright install chromium in the skill folder).
 //
-//   node scripts/frames.mjs --src examples/small/cache.js --out /tmp/cache.png
-//   node scripts/frames.mjs --src scene.js --frames "s1:end,s2:0.5,s3:end,end" --paper linen
+//   node scripts/frames.mjs examples/small/cache.js --out /tmp/cache.png
+//   node scripts/frames.mjs scene.js --frames "s1:end,s2:0.5,s3:end,end" --paper linen
+//   (--src scene.js works too)
 //
 // Frames: "sN:end" = end of step N, "sN:0.5" = halfway through step N,
 // "t:4.2" = 4.2 s in, "end" = the finished drawing. Default: the middle and
@@ -18,15 +18,23 @@ import { createRequire } from 'node:module';
 import { jsonScript } from './lib/inline.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const args = Object.fromEntries(process.argv.slice(2).reduce((a, v, i, all) => (v.startsWith('--') ? a.concat([[v.slice(2), all[i + 1] && !all[i + 1].startsWith('--') ? all[i + 1] : true]]) : a), []));
-const USAGE = 'usage: frames.mjs --src scene.js [--out sheet.png] [--scene id] [--frames "s1:end,s2:0.5,end"] [--paper blue|linen] [--cols 2] [--width 520]';
+// Options take a value; the scene file can be given bare, like the other scripts, or as --src.
+const argv = process.argv.slice(2), args = {}, files = [];
+for (let i = 0; i < argv.length; i++) {
+  const v = argv[i];
+  if (!v.startsWith('--')) { files.push(v); continue; }
+  args[v.slice(2)] = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : true;
+}
+const USAGE = 'usage: frames.mjs scene.js [--out sheet.png] [--scene id] [--frames "s1:end,s2:0.5,end"] [--paper blue|linen] [--cols 2] [--width 520]';
 for (const k of ['src', 'out', 'scene', 'frames', 'paper', 'cols', 'width']) if (args[k] === true) { console.error(`--${k} needs a value\n${USAGE}`); process.exit(2); }
 for (const k of Object.keys(args)) if (!['src', 'out', 'scene', 'frames', 'paper', 'cols', 'width'].includes(k)) { console.error(`unknown option --${k}\n${USAGE}`); process.exit(2); }
+if (files.length > (args.src ? 0 : 1)) { console.error(`frames.mjs renders one scene file; got ${[args.src, ...files].filter(Boolean).join(', ')}\n${USAGE}`); process.exit(2); }
+args.src = args.src || files[0];
 if (!args.src) { console.error(USAGE); process.exit(2); }
 
 const require = createRequire(import.meta.url);
 let playwright;
-try { playwright = require('playwright'); } catch { try { playwright = require('playwright-core'); } catch { console.error('Playwright not found. In a scratch dir: npm i playwright@1.56.1, then NODE_PATH=<scratch>/node_modules node frames.mjs ...'); process.exit(2); } }
+try { playwright = require('playwright'); } catch { try { playwright = require('playwright-core'); } catch { console.error('Playwright not found. Run npm i && npx playwright install chromium in the skill folder, or in a scratch dir: npm i playwright@1.56.1 && npx playwright install chromium, then NODE_PATH=<scratch>/node_modules node frames.mjs ...'); process.exit(2); } }
 
 const runtime = resolve(here, '../runtime/blueprint.js');
 const src = resolve(args.src);

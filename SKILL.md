@@ -35,7 +35,7 @@ The drawing is done by `runtime/blueprint.js`. You never draw SVG: you write a s
    ```sh
    # once, in <skill-dir>:  npm i && npx playwright install chromium
    # (or in a scratch dir: npm i playwright@1.56.1 && npx playwright install chromium, and prefix NODE_PATH=<scratch>/node_modules)
-   node <skill-dir>/scripts/frames.mjs --src path/to/scene.js --out /tmp/scene.png
+   node <skill-dir>/scripts/frames.mjs path/to/scene.js --out /tmp/scene.png
    ```
    It exits 1 if the scene has errors or the page throws. The default sheet shows the middle and the end of every step. Pick other moments with `--frames "s2:0.4,s3:end,end"`. Check that nothing is cropped, no text sits on a line or a part, every token is visible where it should be, the camera frames what the caption talks about, and the last frame explains the whole idea on its own. Two or three rounds is normal.
 6. **Ship it.** Either embed it:
@@ -53,7 +53,7 @@ The drawing is done by `runtime/blueprint.js`. You never draw SVG: you write a s
    node <skill-dir>/scripts/export.mjs scene.js --format png     # the finished sheet, 2x
    node <skill-dir>/scripts/export.mjs scene.js --format png --steps   # one PNG per step, for slides
    ```
-   `--format all` writes all three. Useful options: `--out` (a name ending in `.png`/`.gif`/`.mp4` sets the file name and each format keeps its own extension; anything else is a folder), `--scene <id>` (for a file with several scenes), `--width` (default 1280), `--speed` (GIF 1.8×, MP4 1.25×), `--fps`, `--paper`, `--audio track.mp3` (MP4 only; the video sets the length). GIF and PNG need only Playwright. MP4 uses ffmpeg when it is on PATH; otherwise, on macOS, `video/encode.swift` through `swift` (the Xcode command-line tools: `xcode-select --install`); elsewhere install ffmpeg. Exports do not carry the scene's `sources`: give the user the links to post with it. Read one exported frame or the PNG back before handing it over.
+   `--format all` writes all three. Useful options: `--out` (a name ending in `.png`/`.gif`/`.mp4` sets the file name and each format keeps its own extension; anything else is a folder), `--scene <id>` (for a file with several scenes), `--width` (default 1280), `--speed` (GIF 1.8×, MP4 1.25×), `--fps`, `--paper`, `--audio track.mp3` (MP4 only; the video sets the length). Keep a GIF under about 5 MB: `export.mjs` warns past that, and a complex scene usually fits with `--width 960`. GIF and PNG need only Playwright. MP4 uses ffmpeg when it is on PATH; otherwise Chromium encodes it (WebCodecs), which covers macOS with nothing else installed; on Linux install ffmpeg. `--encoder ffmpeg|browser` forces one. Exports do not carry the scene's `sources`: give the user the links to post with it. Read one exported frame or the PNG back before handing it over.
 
 ## The element
 

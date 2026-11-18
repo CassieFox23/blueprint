@@ -129,7 +129,7 @@ node scripts/export.mjs examples/small/cache.js --format all --out out/cache.png
 
 Or just ask: `/blueprint how a cache works, as a gif`. Exporting needs Playwright (see [Install](#install)). `--out` ending in `.png`, `.gif` or `.mp4` names the files (each format keeps its own extension, and `--steps` adds `-01`, `-02`…); any other `--out` is a folder. A file with several scenes exports the first; pick another with `--scene <id>`.
 
-MP4 also needs an encoder. With [ffmpeg](https://ffmpeg.org) on your PATH it uses that, with libx264, or libopenh264 where ffmpeg has no libx264 (Fedora's build). Without it, on macOS it runs `video/encode.swift` through `swift`, which comes with the Xcode command-line tools (`xcode-select --install`); on Linux and Windows, install ffmpeg. With `--audio`, the video sets the length: a shorter track ends in silence, a longer one is cut.
+MP4 needs an encoder. With [ffmpeg](https://ffmpeg.org) on your PATH it uses that, with libx264, or libopenh264 where ffmpeg has no libx264 (Fedora's build). Without ffmpeg, Chromium encodes the video itself (WebCodecs) and the script writes the MP4, so on macOS nothing else is needed (Windows should work the same way, but is untested). That needs the full Chromium, which `npx playwright install chromium` downloads alongside the headless shell. On Linux, Playwright's Chromium has no H.264 encoder, so install ffmpeg (`apt install ffmpeg`, `dnf install ffmpeg-free`). `--encoder ffmpeg` or `--encoder browser` picks one. With `--audio`, the video sets the length: a shorter track ends in silence, a longer one is cut.
 
 A scene's `sources` (the links behind an incident sheet) are not drawn into GIFs, videos or images. Put them in the post, the slide notes or the README next to the export. `scripts/build.mjs` lists them under the sheet.
 
@@ -157,11 +157,11 @@ The page inlines the runtime and every scene, and lists each scene's `sources` a
 | `runtime/blueprint.js` | Layout, timeline, SVG renderer and the `<blueprint-scene>` element |
 | `templates/scene.js` | A starting scene |
 | `templates/incident.js` | A starting scene for incidents and postmortems |
-| `scripts/check.mjs` | Lints a scene: unknown ids, empty scenes, parts no step draws, overlapping parts, lines through parts or text, labels off the sheet |
-| `scripts/frames.mjs` | Renders chosen moments into one contact sheet (needs Playwright) |
+| `scripts/check.mjs` | Lints a scene: unknown ids, empty scenes, parts no step draws, overlapping parts, lines through parts or text, text on a zone's border, gates that swing into things, ✓/✕ badges on text, labels off the sheet |
+| `scripts/frames.mjs` | Renders chosen moments into one contact sheet (needs Playwright): `node scripts/frames.mjs scene.js --out sheet.png` |
 | `scripts/build.mjs` | Turns scenes into one standalone HTML page |
 | `scripts/export.mjs` | Exports a scene to GIF, MP4 or PNG |
-| `scripts/lib/` | The GIF encoder, the PNG decoder and the helpers for inlining code into a page |
+| `scripts/lib/` | The GIF encoder, the PNG decoder, the MP4 writer and browser encoder, and the helpers for inlining code into a page |
 | `package.json` | npm scripts (`npm run check -- scene.js`, `build`, `frames`, `export`) and the pinned Playwright |
 | `examples/` | 10 small and 11 complex scenes |
 | `assets/` | The logo and the README's GIF and stills |
