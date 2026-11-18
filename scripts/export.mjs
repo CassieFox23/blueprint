@@ -26,6 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { GifWriter } from './lib/gif.mjs';
 import { decodePNG } from './lib/png.mjs';
 import { openEncoder } from './lib/webcodecs.mjs';
+import { launchChromium } from './lib/chromium.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '..');
 const require = createRequire(import.meta.url);
@@ -86,8 +87,8 @@ const work = mkdtempSync(join(tmpdir(), 'bp-export-'));
 writeFileSync(join(work, 'page.html'), page);
 
 // BLUEPRINT_CHROMIUM: a system Chromium, for offline boxes or distro builds without Playwright's download.
-const browser = await pw.chromium.launch({ executablePath: process.env.BLUEPRINT_CHROMIUM || undefined }).catch(e => {
-  console.error(`Could not start Chromium${process.env.BLUEPRINT_CHROMIUM ? ` at BLUEPRINT_CHROMIUM=${process.env.BLUEPRINT_CHROMIUM}` : ' (run npx playwright install chromium)'}: ${String(e.message || e).split('\n')[0]}`);
+const browser = await launchChromium(pw).catch(e => {
+  console.error(e.message);
   rmSync(work, { recursive: true, force: true }); process.exit(1);
 });
 // Close the browser and remove the temp frames before exiting on an error.
@@ -162,8 +163,8 @@ if (formats.includes('gif')) {
 
 if (formats.includes('mp4')) {
   const fps = +(opt.fps || 30), speed = +(opt.speed || 1.25);
-  // Start the browser encoder first, so a Chromium without H.264 fails before any frames are drawn.
-  if (!useFfmpeg) encoder = await openEncoder(pw, work, fps).catch(e => fail(e.message));
+  // Start the browser encoder first, so a Chromium without H.264 (or AAC, with --audio) fails before any frames are drawn.
+  if (!useFfmpeg) encoder = await openEncoder(pw, work, fps, { audio: !!opt.audio }).catch(e => fail(e.message));
   const { shot, list } = await frames(fps, speed, +(opt.scale || 1));
   const dir = join(work, 'frames'); if (useFfmpeg) mkdirSync(dir);
   const all = [...list, ...Array(Math.round(hold * fps)).fill(list[list.length - 1])];

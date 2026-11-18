@@ -6,6 +6,7 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
+import { launchChromium } from '../scripts/lib/chromium.mjs';
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '..');
 const require = createRequire(import.meta.url);
 let pw; try { pw = require('playwright'); } catch { pw = require('playwright-core'); }
@@ -43,14 +44,18 @@ window.ready = document.fonts.ready
   .then(() => { const c = BLUEPRINT.mount(document.getElementById('sheet'), BLUEPRINT.scenes.cache, { play: 'still', controls: false, font: false }); c.seek(c.timeline.total); return true; });
 </script>`;
 
+// Start the browser before making the temp folder, so a failed start leaves nothing behind.
+const browser = await launchChromium(pw).catch(e => { console.error(e.message); process.exit(1); });
 const work = mkdtempSync(join(tmpdir(), 'bp-og-'));
-writeFileSync(join(work, 'og.html'), html);
-const browser = await pw.chromium.launch({ executablePath: process.env.BLUEPRINT_CHROMIUM || undefined });
-const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
-await page.goto(pathToFileURL(join(work, 'og.html')).href);
-await page.evaluate(() => window.ready);
-await page.waitForTimeout(200);
-await page.screenshot({ path: join(here, 'og.png'), type: 'png' });
-await browser.close();
-rmSync(work, { recursive: true, force: true });
+try {
+  writeFileSync(join(work, 'og.html'), html);
+  const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
+  await page.goto(pathToFileURL(join(work, 'og.html')).href);
+  await page.evaluate(() => window.ready);
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: join(here, 'og.png'), type: 'png' });
+} finally {
+  await browser.close().catch(() => {});
+  rmSync(work, { recursive: true, force: true });
+}
 console.log('wrote ' + join(here, 'og.png'));

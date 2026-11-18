@@ -16,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { jsonScript } from './lib/inline.mjs';
+import { launchChromium } from './lib/chromium.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // Options take a value; the scene file can be given bare, like the other scripts, or as --src.
@@ -70,22 +71,24 @@ want.split(',').map(x=>x.trim()).filter(Boolean).forEach(f=>{
 });
 </script>`;
 
+// Start the browser before making the temp folder, so a failed start leaves nothing behind.
+const browser = await launchChromium(playwright).catch(e => { console.error(e.message); process.exit(1); });
 const dir = mkdtempSync(join(tmpdir(), 'bp-frames-'));
 let report = {}, pageErrors = [], consoleErrors = [];
 try {
   const file = join(dir, 'sheet.html');
   writeFileSync(file, page);
-  const browser = await playwright.chromium.launch({ executablePath: process.env.BLUEPRINT_CHROMIUM || undefined });   // BLUEPRINT_CHROMIUM: a system Chromium
-  try {
-    const pg = await browser.newPage({ viewport: { width: cols * (width + 14) + 32, height: 800 }, deviceScaleFactor: 1 });
-    pg.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') consoleErrors.push(m.text()); });
-    pg.on('pageerror', e => pageErrors.push(String(e)));
-    await pg.goto(pathToFileURL(file).href);
-    await pg.waitForTimeout(300);
-    report = await pg.evaluate(() => ({ ...window.__report, runtime: window.__errors }));
-    await pg.screenshot({ path: out, fullPage: true });
-  } finally { await browser.close(); }
-} finally { rmSync(dir, { recursive: true, force: true }); }
+  const pg = await browser.newPage({ viewport: { width: cols * (width + 14) + 32, height: 800 }, deviceScaleFactor: 1 });
+  pg.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') consoleErrors.push(m.text()); });
+  pg.on('pageerror', e => pageErrors.push(String(e)));
+  await pg.goto(pathToFileURL(file).href);
+  await pg.waitForTimeout(300);
+  report = await pg.evaluate(() => ({ ...window.__report, runtime: window.__errors }));
+  await pg.screenshot({ path: out, fullPage: true });
+} finally {
+  await browser.close().catch(() => {});
+  rmSync(dir, { recursive: true, force: true });
+}
 console.log(`sheet: ${out}`);
 if (report.ids && report.ids.length > 1 && !args.scene) console.log(`note  the file has ${report.ids.length} scenes (${report.ids.join(', ')}); rendered "${report.id}". Pick one with --scene <id>.`);
 if (report.steps != null) console.log(`steps: ${report.steps}, length: ${report.total.toFixed(1)} s`);
