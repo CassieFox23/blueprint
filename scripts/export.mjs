@@ -28,8 +28,8 @@ import { decodePNG } from './lib/png.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '..');
 const require = createRequire(import.meta.url);
-const USAGE = 'usage: export.mjs scene.js --format gif|mp4|png|all (or a list: png,gif) [--out path] [--steps] [--scene id] [--paper blue|linen] [--audio track.mp3] [--width 1280] [--fps n] [--speed n] [--hold s] [--scale n]';
-const VALUED = ['format', 'out', 'width', 'fps', 'speed', 'paper', 'hold', 'scale', 'audio', 'scene'], FLAGS = ['steps'];
+const USAGE = 'usage: export.mjs scene.js --format gif|mp4|png|all (or a list: png,gif) [--out path] [--steps] [--scene id] [--paper blue|linen] [--audio track.mp3] [--width 1280] [--fps n] [--speed n] [--hold s] [--scale n] [--no-font]';
+const VALUED = ['format', 'out', 'width', 'fps', 'speed', 'paper', 'hold', 'scale', 'audio', 'scene'], FLAGS = ['steps', 'no-font'];
 const argv = process.argv.slice(2), opt = {}, files = [];
 const die = (msg, code = 2) => { console.error(`${msg}\n${USAGE}`); process.exit(code); };
 for (let i = 0; i < argv.length; i++) {
@@ -77,7 +77,7 @@ const outFor = ext => join(outDir, `${stem}.${ext}`);
 const stepsDir = opt.out ? outDir : resolve(dirname(src), `${stemOf}-steps`);
 
 const page = `<!doctype html><meta charset="utf-8">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+${opt['no-font'] ? '' : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap">'}
 <style>html,body{margin:0;background:transparent}#h{width:${width}px}.bp-svg{border-radius:0!important}</style>
 <div id="h"></div>
 <script src="${pathToFileURL(join(root, 'runtime/blueprint.js'))}"></script>
@@ -85,7 +85,10 @@ const page = `<!doctype html><meta charset="utf-8">
 const work = mkdtempSync(join(tmpdir(), 'bp-export-'));
 writeFileSync(join(work, 'page.html'), page);
 
-const browser = await pw.chromium.launch();
+// BLUEPRINT_CHROMIUM: a system Chromium, for offline boxes or distro builds without Playwright's download.
+const browser = await pw.chromium.launch({ executablePath: process.env.BLUEPRINT_CHROMIUM || undefined });
+// Close the browser and remove the temp frames before exiting on an error.
+async function fail(msg) { console.error(msg); await browser.close().catch(() => {}); rmSync(work, { recursive: true, force: true }); process.exit(1); }
 async function open(scale) {
   const p = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: scale });
   p.on('pageerror', e => console.log('PAGE ERROR', String(e)));
@@ -99,7 +102,7 @@ async function open(scale) {
     window.C = BLUEPRINT.mount(document.getElementById('h'), BLUEPRINT.scenes[id], { play: 'still', controls: false, font: false, paper: paper || undefined });
     return { id, ids, total: window.C.timeline.total, steps: window.C.timeline.steps.map(s => ({ a: s.a, b: s.b, say: s.say })) };
   }, [opt.paper, opt.scene]);
-  if (info.error) { console.error(info.error); await browser.close(); rmSync(work, { recursive: true, force: true }); process.exit(1); }
+  if (info.error) await fail(info.error);
   if (info.ids.length > 1 && !opt.scene && !noted++) console.warn(`warn: ${files[0]} has ${info.ids.length} scenes (${info.ids.join(', ')}); exporting "${info.id}". Pick one with --scene <id>.`);
   const clip = await p.locator('#h .bp-svg').boundingBox();
   const shot = async t => { await p.evaluate(t => window.C.seek(t), t); return p.screenshot({ clip, type: 'png', omitBackground: false }); };
@@ -161,18 +164,20 @@ if (formats.includes('mp4')) {
     const args = ['-y', '-loglevel', 'error', '-framerate', String(fps), '-i', join(dir, 'f%05d.png')];
     // The video sets the length: a short track is padded with silence, a long one is cut.
     if (audio) args.push('-i', audio, '-af', 'apad', '-t', (all.length / fps).toFixed(3), '-c:a', 'aac', '-b:a', '192k');
-    args.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-movflags', '+faststart', f);
+    // Fedora's ffmpeg has no libx264, only libopenh264 (Baseline profile, about twice the size).
+    const x264 = /\blibx264\b/.test(String(spawnSync('ffmpeg', ['-hide_banner', '-encoders']).stdout));
+    args.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', x264 ? 'libx264' : 'libopenh264', '-pix_fmt', 'yuv420p', ...(x264 ? ['-crf', '17', '-preset', 'slow'] : []), '-movflags', '+faststart', f);
     const r = spawnSync('ffmpeg', args, { stdio: 'inherit' });
-    if (r.status !== 0) { console.error('ffmpeg failed'); process.exit(1); }
+    if (r.status !== 0) await fail('ffmpeg failed');
   } else {
     let m4a = '-';
     if (audio) {
       m4a = join(work, 'audio.m4a');
       const ac = spawnSync('afconvert', ['-f', 'm4af', '-d', 'aac', '-b', '192000', audio, m4a], { stdio: ['ignore', 'pipe', 'pipe'] });
-      if (ac.status !== 0 || !existsSync(m4a)) { console.error(`afconvert could not turn ${opt.audio} into AAC (try a 44.1 or 48 kHz stereo file, or install ffmpeg): ${String(ac.stderr).trim()}`); process.exit(1); }
+      if (ac.status !== 0 || !existsSync(m4a)) await fail(`afconvert could not turn ${opt.audio} into AAC (try a 44.1 or 48 kHz stereo file, or install ffmpeg): ${String(ac.stderr).trim()}`);
     }
     const r = spawnSync('swift', [join(root, 'video/encode.swift'), dir, m4a, f, String(fps), '14000000'], { stdio: ['ignore', 'pipe', 'pipe'] });
-    if (r.status !== 0 || !existsSync(f)) { console.error(String(r.stdout) + String(r.stderr)); process.exit(1); }
+    if (r.status !== 0 || !existsSync(f)) await fail(String(r.stdout) + String(r.stderr));
   }
   written.push(f);
 }

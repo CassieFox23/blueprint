@@ -45,7 +45,7 @@ window.ready = document.fonts.ready
 
 const work = mkdtempSync(join(tmpdir(), 'bp-og-'));
 writeFileSync(join(work, 'og.html'), html);
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.BLUEPRINT_CHROMIUM || undefined });
 const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
 await page.goto(pathToFileURL(join(work, 'og.html')).href);
 await page.evaluate(() => window.ready);

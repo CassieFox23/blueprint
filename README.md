@@ -40,6 +40,8 @@ npx playwright install chromium   # downloads the browser it drives
 
 Linting (`scripts/check.mjs`) and building a page (`scripts/build.mjs`) need nothing but Node.
 
+Offline, or on a distro that ships its own Chromium, skip the download and point the scripts at it: `BLUEPRINT_CHROMIUM=/usr/bin/chromium-browser node scripts/export.mjs …` (works for `frames.mjs` too).
+
 ## Use
 
 ```
@@ -107,8 +109,9 @@ Watch any of them at **[blueprint.intincrab.com](https://blueprint.intincrab.com
 | `key` | Shows the numbered parts list under the sheet |
 | `no-controls` | Hides the play, step and replay bar |
 | `speed` | Playback rate, e.g. `1.25` |
+| `no-font` | Uses the reader's own monospace font instead of fetching IBM Plex Mono from Google Fonts |
 
-Every sheet has play and pause, previous and next step, and a step bar. With reduced motion turned on it shows the finished sheet. The runtime is one file with no dependencies.
+Every sheet has play and pause, previous and next step, and a step bar. With reduced motion turned on it shows the finished sheet. The runtime is one file with no dependencies. By default it loads IBM Plex Mono from Google Fonts; add `no-font` (or pass `--no-font` to `build.mjs` and `export.mjs`) and the page makes no outside requests.
 
 ## Share it as a GIF, video or image
 
@@ -124,7 +127,7 @@ node scripts/export.mjs examples/small/cache.js --format all --out out/cache.png
 
 Or just ask: `/blueprint how a cache works, as a gif`. Exporting needs Playwright (see [Install](#install)). `--out` ending in `.png`, `.gif` or `.mp4` names the files (each format keeps its own extension, and `--steps` adds `-01`, `-02`…); any other `--out` is a folder. A file with several scenes exports the first; pick another with `--scene <id>`.
 
-MP4 also needs an encoder. With [ffmpeg](https://ffmpeg.org) on your PATH it uses that. Without it, on macOS it runs `video/encode.swift` through `swift`, which comes with the Xcode command-line tools (`xcode-select --install`); on Linux and Windows, install ffmpeg. With `--audio`, the video sets the length: a shorter track ends in silence, a longer one is cut.
+MP4 also needs an encoder. With [ffmpeg](https://ffmpeg.org) on your PATH it uses that, with libx264, or libopenh264 where ffmpeg has no libx264 (Fedora's build). Without it, on macOS it runs `video/encode.swift` through `swift`, which comes with the Xcode command-line tools (`xcode-select --install`); on Linux and Windows, install ffmpeg. With `--audio`, the video sets the length: a shorter track ends in silence, a longer one is cut.
 
 A scene's `sources` (the links behind an incident sheet) are not drawn into GIFs, videos or images. Put them in the post, the slide notes or the README next to the export. `scripts/build.mjs` lists them under the sheet.
 

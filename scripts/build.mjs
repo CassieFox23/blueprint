@@ -4,6 +4,7 @@
 //
 //   node scripts/build.mjs examples/small/cache.js --out cache.html
 //   node scripts/build.mjs a.js b.js --out explainers.html --title "How our API works" --play view --paper linen
+//   --no-font: use the reader's own monospace font instead of fetching IBM Plex Mono from Google Fonts.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,8 +12,8 @@ import vm from 'node:vm';
 import { scriptSafe, esc, httpSources } from './lib/inline.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const USAGE = 'usage: build.mjs scene.js [more.js] [--out page.html] [--title "…"] [--play loop|view|click|still] [--paper blue|linen]';
-const VALUED = ['out', 'title', 'play', 'paper'];
+const USAGE = 'usage: build.mjs scene.js [more.js] [--out page.html] [--title "…"] [--play loop|view|click|still] [--paper blue|linen] [--no-font]';
+const VALUED = ['out', 'title', 'play', 'paper'], FLAGS = ['no-font'];
 const argv = process.argv.slice(2), files = [], opt = {};
 const fail = msg => { console.error(`${msg}\n${USAGE}`); process.exit(2); };
 for (let i = 0; i < argv.length; i++) {
@@ -20,6 +21,7 @@ for (let i = 0; i < argv.length; i++) {
   if (!a.startsWith('--')) { files.push(a); continue; }
   const eq = a.indexOf('='), key = a.slice(2, eq < 0 ? undefined : eq);
   if (key === 'help') { console.log(USAGE); process.exit(0); }
+  if (FLAGS.includes(key) && eq < 0) { opt[key] = true; continue; }
   if (!VALUED.includes(key)) fail(`unknown option --${key}`);
   if (eq >= 0) opt[key] = a.slice(eq + 1);
   else if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) opt[key] = argv[++i];
@@ -65,7 +67,7 @@ h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute
 .src a{color:inherit}
 </style></head><body><main>
 ${all.length > 1 ? `<h1>${esc(title)}</h1>` : ''}
-${all.map(([id, s]) => `<section>${all.length > 1 ? `<h2>${esc(s.title || id)}</h2>` : ''}<blueprint-scene scene="${esc(id)}" play="${esc(play)}"${paper} key></blueprint-scene>${sourcesOf(s)}</section>`).join('\n')}
+${all.map(([id, s]) => `<section>${all.length > 1 ? `<h2>${esc(s.title || id)}</h2>` : ''}<blueprint-scene scene="${esc(id)}" play="${esc(play)}"${paper}${opt['no-font'] ? ' no-font' : ''} key></blueprint-scene>${sourcesOf(s)}</section>`).join('\n')}
 </main>
 <script>${scriptSafe(runtime)}</script>
 ${scenes.map(s => `<script>${scriptSafe(s.code)}</script>`).join('\n')}

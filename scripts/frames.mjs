@@ -67,7 +67,7 @@ let report = {}, pageErrors = [], consoleErrors = [];
 try {
   const file = join(dir, 'sheet.html');
   writeFileSync(file, page);
-  const browser = await playwright.chromium.launch();
+  const browser = await playwright.chromium.launch({ executablePath: process.env.BLUEPRINT_CHROMIUM || undefined });   // BLUEPRINT_CHROMIUM: a system Chromium
   try {
     const pg = await browser.newPage({ viewport: { width: cols * (width + 14) + 32, height: 800 }, deviceScaleFactor: 1 });
     pg.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') consoleErrors.push(m.text()); });
